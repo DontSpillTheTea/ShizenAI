@@ -76,8 +76,11 @@ def search_records(request: schemas.SearchRequest, db: Session = Depends(get_db)
             top_record, distance = results[0]
             top_similarity = 1.0 - float(distance)
             
-        # Confidence Gateway
-        if top_similarity >= 0.75:
+        # Confidence Gateway (Nomic-embed often clusters around 0.5-0.6; 0.70 is a safer default than 0.75)
+        import os
+        confidence_threshold = float(os.getenv("CONFIDENCE_SCORE", "0.70"))
+        
+        if top_similarity >= confidence_threshold:
             answer_text = top_record.summary
             source_origin = "local_db"
             final_similarity = top_similarity
