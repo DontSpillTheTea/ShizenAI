@@ -1,4 +1,5 @@
 import os
+import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -45,3 +46,23 @@ def generate_embedding(text: str) -> list[float]:
     embedding = response.data[0].embedding
     
     return embedding
+
+def mock_external_search(query: str) -> str:
+    client = get_client()
+    model = "llama3" if AI_PROVIDER == "local" else "gpt-4o-mini"
+    
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a Research Assistant with access to the wider internet. Answer the user's query comprehensively based on general knowledge."},
+            {"role": "user", "content": query}
+        ],
+        max_tokens=256,
+        temperature=0.7
+    )
+    return response.choices[0].message.content.strip()
+
+def mock_audio_synthesis(text: str) -> str:
+    # Simulate API latency realistically requested for Mock ElevenLabs
+    time.sleep(1.5)
+    return "/api/v1/mock-audio"

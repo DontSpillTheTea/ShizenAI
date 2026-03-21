@@ -19,11 +19,10 @@ class RecordResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     limit: int = 5
+    mode: str = "text"
 
-class SearchResultItem(BaseModel):
-    id: uuid.UUID
-    summary: str
-    similarity_score: float
-
-class SearchResponse(BaseModel):
-    results: List[SearchResultItem]
+class UnifiedQueryResponse(BaseModel):
+    text: str
+    source_origin: str
+    similarity_score: Optional[float] = None
+    audio_url: Optional[str] = None

@@ -6,10 +6,11 @@ export interface RecordItem {
   created_at: string;
 }
 
-export interface SearchResult {
-  id: string;
-  summary: string;
-  similarity_score: number;
+export interface UnifiedQueryResponse {
+  text: string;
+  source_origin: string;
+  similarity_score: number | null;
+  audio_url: string | null;
 }
 
 export const api = {
@@ -29,13 +30,13 @@ export const api = {
     return res.json();
   },
   
-  search: async (query: string, limit: number = 5): Promise<{results: SearchResult[]}> => {
+  query: async (queryText: string, mode: string = 'text', limit: number = 5): Promise<UnifiedQueryResponse> => {
     const res = await fetch(`${API_BASE}/api/v1/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, limit })
+      body: JSON.stringify({ query: queryText, limit, mode })
     });
-    if (!res.ok) throw new Error('Search failed');
+    if (!res.ok) throw new Error('Query failed');
     return res.json();
   }
 };
