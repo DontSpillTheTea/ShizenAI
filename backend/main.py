@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import traceback
 from database import get_db, engine, Base
 import models
 import schemas
@@ -50,6 +51,7 @@ def ingest_text(request: schemas.IngestRequest, db: Session = Depends(get_db)):
         )
     except Exception as e:
         db.rollback()
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/records", response_model=list[schemas.RecordResponse])
@@ -80,4 +82,5 @@ def search_records(request: schemas.SearchRequest, db: Session = Depends(get_db)
             
         return schemas.SearchResponse(results=search_results)
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

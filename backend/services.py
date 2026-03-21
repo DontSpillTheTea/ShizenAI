@@ -44,8 +44,4 @@ def generate_embedding(text: str) -> list[float]:
     )
     embedding = response.data[0].embedding
     
-    # Pad to 1536 if using Nomic (768) to fit in DB fixed vector size
-    if len(embedding) == 768:
-        embedding.extend([0.0] * 768)
-        
     return embedding
