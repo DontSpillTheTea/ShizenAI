@@ -144,3 +144,18 @@ export async function createEmployee(name: string) {
   if (!res.ok) throw new Error('Failed to create new user');
   return res.json();
 }
+
+export async function importOmiConversation(sessionId: string): Promise<{ message: string; topics_extracted: number }> {
+  // Stub: wire to backend endpoint once implemented
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}/api/v1/admin/omi/import`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ session_id: sessionId })
+  });
+  if (!res.ok) throw new Error('Omi import failed');
+  return res.json();
+}

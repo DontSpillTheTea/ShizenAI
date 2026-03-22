@@ -29,7 +29,7 @@ function LoginScreen() {
             <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             ShizenAI
             </h2>
-            <p className="text-center text-slate-400 font-mono text-xs tracking-widest uppercase">Phase 3: Deep Verification</p>
+            <p className="text-center text-slate-400 font-mono text-xs tracking-widest uppercase">Capture knowledge. Verify fluency. Build trust.</p>
         </div>
 
         <div className="space-y-4 relative z-10">
@@ -56,7 +56,7 @@ function MainLayout() {
             <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
               <svg className="w-6 h-6 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">ShizenAI <span className="text-emerald-500 font-light">| Verification Engine</span></h1>
+            <h1 className="text-2xl font-black text-white tracking-tight">ShizenAI <span className="text-emerald-500 font-light">| Knowledge Capture & Fluency Tracking</span></h1>
           </div>
           
           <div className="flex items-center gap-8 text-sm">

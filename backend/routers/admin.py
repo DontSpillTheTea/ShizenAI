@@ -42,9 +42,12 @@ async def upload_document(
             topic.path = str(topic.id)
         db.flush()
     
-    # 3. LangChain Semantic Chunking
+    # 3. Line-by-Line Semantic Chunking
+    raw_lines = [line.strip() for line in text.split('\n') if line.strip()]
     splitter = RecursiveCharacterTextSplitter(chunk_size=750, chunk_overlap=100)
-    chunks = splitter.split_text(text)
+    chunks = []
+    for line in raw_lines:
+        chunks.extend(splitter.split_text(line))
     
     # 4. Embed, Store, and Auto-Generate Flashcards
     created_flashcards = 0

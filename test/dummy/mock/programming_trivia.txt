@@ -1,0 +1,10 @@
+Python uses indentation for syntax blocks.
+C++ uses double colons for scope resolution.
+JavaScript uses triple equals for strict equality.
+Rust uses match for powerful pattern matching.
+Java uses public static void main as the entry point.
+Ruby uses attr_accessor to generate getters and setters.
+Go uses defer to guarantee cleanup execution.
+PHP uses dollar signs to declare variable names.
+Swift uses guard to exit scope early on failure.
+SQL uses SELECT to query data from tables.
