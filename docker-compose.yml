@@ -10,14 +10,14 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - shizen_pg_data:/var/lib/postgresql/data
 
   ollama:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - shizen_ollama_models:/root/.ollama
 
   backend:
     build:
@@ -48,5 +48,7 @@ services:
       - /app/node_modules
 
 volumes:
-  postgres_data:
-  ollama_data:
+  shizen_pg_data:
+    external: true
+  shizen_ollama_models:
+    external: true

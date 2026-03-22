@@ -55,10 +55,13 @@ To completely destroy the containers and networks, but **retain** persistent dat
 docker compose down
 ```
 
-To **hard reset** everything (WARNING: DELETES YOUR DATABASE AND DOWNLOADED MODELS):
+To **hard reset** everything (WARNING: DELETES BUILT IMAGES. External volumes must be deleted manually):
 ```bash
 docker compose down -v
+docker volume rm shizen_pg_data shizen_ollama_models
 ```
+
+*(Note: Because `shizen_pg_data` and `shizen_ollama_models` are mapped as purely external volumes in Compose, `docker compose down -v` protects them from accidental deletion and only targets nameless, non-external bridged volumes.)*
 
 ---
 
