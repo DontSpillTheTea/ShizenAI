@@ -80,3 +80,17 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "perplexity_api_key" {
+  description = "Perplexity API key injected into backend runtime"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "elevenlabs_api_key" {
+  description = "Optional ElevenLabs API key injected into backend runtime"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

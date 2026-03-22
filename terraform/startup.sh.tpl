@@ -2,6 +2,7 @@
 # ShizenAI VM startup script for GCE.
 # Terraform template variables used:
 # - environment, db_host, db_port, db_name, db_user, db_password
+# - perplexity_api_key, elevenlabs_api_key
 # - app_port
 
 set -euo pipefail
@@ -45,6 +46,8 @@ DB_NAME=${db_name}
 DB_USER=${db_user}
 DB_PASSWORD=${db_password}
 DATABASE_URL=postgresql://${db_user}:${db_password}@${db_host}:${db_port}/${db_name}
+PERPLEXITY_API_KEY=${perplexity_api_key}
+ELEVENLABS_API_KEY=${elevenlabs_api_key}
 APP_PORT=${app_port}
 VITE_API_URL=http://$${VM_IP}:8000
 ENV
@@ -61,10 +64,7 @@ else
 fi
 cp /opt/shizen/.env "$APP_DIR/.env"
 
-# Bootstrap compatibility for older compose files in the repo.
-# 1) Prevent compose from failing when optional secret env files are absent.
-touch "$APP_DIR/perplexity_key.env" "$APP_DIR/elevenlabs_key.env"
-# 2) Ensure frontend uses the VM public IP for backend calls.
+# Ensure frontend uses the VM public IP for backend calls.
 sed -i "s|VITE_API_URL=http://localhost:8000|VITE_API_URL=http://$${VM_IP}:8000|g" "$APP_DIR/docker-compose.yml" || true
 echo "[6/7] Ensuring external Docker volumes..."
 docker volume create shizen_pg_data >/dev/null 2>&1 || true

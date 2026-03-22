@@ -17,6 +17,8 @@ export default function EmployeeDashboard() {
   const [treeData, setTreeData] = useState<TopicNode[]>([]);
 
   const [isListening, setIsListening] = useState(false);
+  const [micNotice, setMicNotice] = useState('');
+  const [micReady, setMicReady] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [autoSubmitTrigger, setAutoSubmitTrigger] = useState(0);
 
@@ -41,6 +43,12 @@ export default function EmployeeDashboard() {
   }, []);
 
   useEffect(() => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!window.isSecureContext && !isLocalhost) {
+      setMicNotice('Microphone is blocked on insecure HTTP. Use HTTPS (or localhost) and allow mic permission.');
+      return;
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       const rec = new SpeechRecognition();
@@ -53,17 +61,45 @@ export default function EmployeeDashboard() {
         }
         if (finalTrans) setAnswer((prev: string) => prev + (prev.trim() ? ' ' : '') + finalTrans.trim());
       };
-      rec.onerror = (e: any) => { console.error(e); setIsListening(false); };
+      rec.onerror = (e: any) => {
+        console.error(e);
+        if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') {
+          setMicNotice('Microphone permission denied. Enable mic access in browser site settings.');
+        } else {
+          setMicNotice(`Microphone error: ${e?.error || 'unknown'}.`);
+        }
+        setIsListening(false);
+      };
       recognitionRef.current = rec;
+      setMicReady(true);
+    } else {
+      setMicNotice('Speech recognition is not supported in this browser.');
     }
   }, []);
 
-  const toggleListen = () => {
+  const toggleListen = async () => {
+    if (!micReady || !recognitionRef.current) {
+      if (!micNotice) setMicNotice('Microphone is unavailable in this browser/context.');
+      return;
+    }
+
     if (isListening) {
       try { recognitionRef.current?.stop(); } catch (e) { }
       setIsListening(false);
     } else {
-      try { recognitionRef.current?.start(); } catch (e) { }
+      try {
+        // Trigger permission prompt for browsers that gate speech APIs behind mic permission.
+        if (navigator.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((t) => t.stop());
+        }
+        recognitionRef.current?.start();
+        setMicNotice('');
+      } catch (e: any) {
+        console.error(e);
+        setMicNotice('Microphone permission blocked. Allow mic access and retry.');
+        return;
+      }
       setIsListening(true);
     }
   };
@@ -72,6 +108,7 @@ export default function EmployeeDashboard() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
         e.preventDefault();
+        if (!micReady || !recognitionRef.current) return;
         try { recognitionRef.current?.start(); } catch (err) { }
         setIsListening(true);
       }
@@ -238,6 +275,11 @@ export default function EmployeeDashboard() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4 flex flex-col">
+                {micNotice && (
+                  <div className="text-xs text-amber-300 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2">
+                    {micNotice}
+                  </div>
+                )}
                 <div className="relative">
                   <textarea
                     value={answer}
