@@ -145,17 +145,38 @@ export async function createEmployee(name: string) {
   return res.json();
 }
 
-export async function importOmiConversation(sessionId: string): Promise<{ message: string; topics_extracted: number }> {
-  // Stub: wire to backend endpoint once implemented
-  const token = localStorage.getItem('token');
-  const res = await fetch(`${API_URL}/api/v1/admin/omi/import`, {
+// ── Omi Integration ──────────────────────────────────────────────────────────
+
+export async function importOmiText(
+  title: string,
+  text: string,
+  topicPath?: string
+): Promise<{ status: string; source_id: string }> {
+  const res = await fetch(`${API_URL}/api/v1/integrations/omi/import-text`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ session_id: sessionId })
+    headers: getHeaders(),
+    body: JSON.stringify({ title, text, topic_path: topicPath })
   });
-  if (!res.ok) throw new Error('Omi import failed');
+  if (!res.ok) throw new Error('Omi text import failed');
+  return res.json();
+}
+
+export async function finalizeOmiImport(
+  params: { source_id?: string; session_id?: string; topic_path?: string }
+): Promise<{ status: string; source_id: string; topics_created: any[]; message: string }> {
+  const res = await fetch(`${API_URL}/api/v1/integrations/omi/finalize`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(params)
+  });
+  if (!res.ok) throw new Error('Omi finalize failed');
+  return res.json();
+}
+
+export async function getOmiCaptures(): Promise<any[]> {
+  const res = await fetch(`${API_URL}/api/v1/integrations/omi/captures`, {
+    headers: getHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to load Omi captures');
   return res.json();
 }

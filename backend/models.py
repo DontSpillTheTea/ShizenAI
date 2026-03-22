@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, DateTime, Float, Integer, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -22,14 +22,17 @@ class Topic(Base):
     __tablename__ = "topics"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     parent_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), nullable=True)
-    path = Column(String, nullable=False, default="", index=True) # Materialized path e.g. "uuid/uuid"
+    path = Column(String, nullable=False, default="", index=True)
     title = Column(String, nullable=False)
+    source_type = Column(String, nullable=True)   # 'formal' | 'informal'
+    source_id = Column(UUID(as_uuid=True), nullable=True)  # FK to knowledge_sources.id (nullable for legacy)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     subtopics = relationship("Topic", backref="parent", remote_side=[id])
     chunks = relationship("KnowledgeChunk", back_populates="topic")
     assignments = relationship("UserAssignment", back_populates="topic")
     progress = relationship("ProgressCache", back_populates="topic")
+
 
 class KnowledgeChunk(Base):
     __tablename__ = "knowledge_chunks"
@@ -84,3 +87,28 @@ class ProgressCache(Base):
 
     user = relationship("User", back_populates="progress")
     topic = relationship("Topic", back_populates="progress")
+
+
+class OmiCapture(Base):
+    """Raw transcript chunks received from Omi webhooks or manual import."""
+    __tablename__ = "omi_captures"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String, nullable=True, index=True)
+    source_label = Column(String, default="omi", nullable=False)
+    speaker_label = Column(String, nullable=True)
+    raw_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    processed = Column(Boolean, default=False, nullable=False)
+
+
+class KnowledgeSource(Base):
+    """Normalized record for every captured knowledge source (formal or informal)."""
+    __tablename__ = "knowledge_sources"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    origin = Column(String, nullable=False)         # 'omi' | 'pdf' | 'docx' | 'txt' | 'manual'
+    source_type = Column(String, nullable=False)    # 'formal' | 'informal'
+    title = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
+    raw_content = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

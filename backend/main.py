@@ -56,4 +56,4 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 
 app.include_router(admin.router)
 app.include_router(employee.router)
-
+app.include_router(omi.router)

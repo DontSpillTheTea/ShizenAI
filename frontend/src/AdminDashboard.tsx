@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { uploadDocument, getUsers, assignTopic, getAdminHierarchy, createEmployee, importOmiConversation } from './api';
+import { uploadDocument, getUsers, assignTopic, getAdminHierarchy, createEmployee, importOmiText, finalizeOmiImport, getOmiCaptures } from './api';
 import { TopicTree, TopicNode, buildTree, countTopicStatuses } from './components/TopicTree';
 import { Sprout } from 'lucide-react';
 
@@ -24,17 +24,29 @@ export default function AdminDashboard() {
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [newUserName, setNewUserName] = useState('');
 
-  const [omiSessionId, setOmiSessionId] = useState('');
+  const [omiTitle, setOmiTitle] = useState('');
+  const [omiTranscript, setOmiTranscript] = useState('');
+  const [omiTopicPath, setOmiTopicPath] = useState('');
   const [omiStatus, setOmiStatus] = useState('');
+  const [omiLoading, setOmiLoading] = useState(false);
 
-  const [capturedItems, setCapturedItems] = useState<CapturedItem[]>([
-    { id: '1', title: 'Deployment rollback walkthrough', source_type: 'informal', origin: 'Captured from Omi conversation', topics_extracted: 3, unchecked: 3 },
-    { id: '2', title: 'On-call runbook', source_type: 'formal', origin: 'Uploaded document', topics_extracted: 5, unchecked: 2 },
-  ]);
+  const [capturedItems, setCapturedItems] = useState<CapturedItem[]>([]);
 
-  // Load Users
+  // Load Users and captured knowledge on mount
   useEffect(() => {
     getUsers().then(setUsers).catch(console.error);
+    getOmiCaptures().then(items => {
+      if (items.length > 0) {
+        setCapturedItems(items.map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          source_type: s.source_type,
+          origin: s.origin === 'omi' ? 'Captured from Omi conversation' : 'Uploaded document',
+          topics_extracted: s.topics_created_count,
+          unchecked: s.unchecked_count,
+        })));
+      }
+    }).catch(console.error);
   }, []);
 
   // Hydrate Tree when a user is selected (or general pool)
@@ -95,25 +107,34 @@ export default function AdminDashboard() {
   };
 
   const handleOmiImport = async () => {
-    if (!omiSessionId.trim()) return;
-    setOmiStatus('Importing Omi conversation...');
+    if (!omiTranscript.trim()) { setOmiStatus('Please paste a transcript first.'); return; }
+    setOmiLoading(true);
+    setOmiStatus('Saving transcript...');
     try {
-      const res = await importOmiConversation(omiSessionId.trim());
-      const msg = `Imported Omi conversation and extracted ${res.topics_extracted} unchecked topic${res.topics_extracted !== 1 ? 's' : ''}.`;
-      setOmiStatus(msg);
-      const newItem: CapturedItem = {
-        id: Date.now().toString(),
-        title: `Omi: ${omiSessionId.trim()}`,
-        source_type: 'informal',
-        origin: 'Captured from Omi conversation',
-        topics_extracted: res.topics_extracted,
-        unchecked: res.topics_extracted,
-      };
-      setCapturedItems(prev => [newItem, ...prev]);
-      setOmiSessionId('');
-    } catch {
-      setOmiStatus('Omi import is not yet wired to the backend — frontend stub ready.');
+      const title = omiTitle.trim() || 'Omi conversation';
+      const { source_id } = await importOmiText(title, omiTranscript.trim(), omiTopicPath.trim() || undefined);
+      setOmiStatus('Extracting topics with AI — this may take a moment...');
+      const result = await finalizeOmiImport({ source_id, topic_path: omiTopicPath.trim() || undefined });
+      setOmiStatus(result.message);
+      // Refresh captures from backend
+      const captures = await getOmiCaptures();
+      setCapturedItems(captures.map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        source_type: s.source_type,
+        origin: s.origin === 'omi' ? 'Captured from Omi conversation' : 'Uploaded document',
+        topics_extracted: s.topics_created_count,
+        unchecked: s.unchecked_count,
+      })));
+      // Refresh topic tree
+      loadTree(selectedUserId || '');
+      setOmiTitle('');
+      setOmiTranscript('');
+      setOmiTopicPath('');
+    } catch (err: any) {
+      setOmiStatus(`Import failed: ${err.message}`);
     }
+    setOmiLoading(false);
   };
 
   const handleToggleTopic = (id: string, isChecked: boolean) => {
@@ -182,23 +203,37 @@ export default function AdminDashboard() {
           <div className="border-t border-white/10 pt-6 space-y-3">
             <div>
               <p className="text-sm font-bold text-white">Import Omi Conversation</p>
-              <p className="text-xs text-gray-400 mt-1">Capture informal spoken knowledge and convert it into unchecked topics.</p>
+              <p className="text-xs text-gray-400 mt-1">Paste a transcript from an Omi conversation to capture informal spoken knowledge.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Omi session or conversation ID"
-                value={omiSessionId}
-                onChange={e => setOmiSessionId(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleOmiImport()}
-                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:outline-emerald-500"
+                placeholder="Title (e.g. Rollback walkthrough)"
+                value={omiTitle}
+                onChange={e => setOmiTitle(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-indigo-500"
+              />
+              <textarea
+                placeholder="Paste Omi transcript here..."
+                value={omiTranscript}
+                onChange={e => setOmiTranscript(e.target.value)}
+                rows={4}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-indigo-500 resize-none"
+              />
+              <input
+                type="text"
+                placeholder="Topic path (e.g. Engineering &gt; Deployments)"
+                value={omiTopicPath}
+                onChange={e => setOmiTopicPath(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-indigo-500"
               />
               <button
                 type="button"
                 onClick={handleOmiImport}
-                className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold uppercase tracking-wider rounded-lg text-sm transition-colors"
+                disabled={omiLoading || !omiTranscript.trim()}
+                className="w-full px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-gray-500 text-white font-bold uppercase tracking-wider rounded-lg text-sm transition-colors"
               >
-                Import
+                {omiLoading ? 'Extracting...' : 'Import & Extract Topics'}
               </button>
             </div>
             {omiStatus && <div className="p-3 bg-slate-900 rounded-lg text-xs font-mono text-indigo-300 border border-indigo-900/50">{omiStatus}</div>}
