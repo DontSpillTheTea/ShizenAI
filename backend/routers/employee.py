@@ -12,6 +12,17 @@ class EvaluationRequest(BaseModel):
     flashcard_id: str
     user_answer: str
 
+@router.get("/hierarchy/topics")
+def get_topic_hierarchy(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Only return topics assigned to this user (they exist in ProgressCache)
+    topics = db.query(models.Topic).join(models.ProgressCache).filter(models.ProgressCache.user_id == current_user.id).all()
+    payload = []
+    for t in topics:
+        c = db.query(models.ProgressCache).filter_by(topic_id=t.id, user_id=current_user.id).first()
+        status = c.status if c else "gray"
+        payload.append({"id": str(t.id), "title": t.title, "path": t.path, "parent_id": str(t.parent_id) if t.parent_id else None, "status": status})
+    return payload
+
 @router.get("/queue")
 def get_daily_queue(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     # Fetch UserReviews where next_review_at <= today
@@ -65,9 +76,17 @@ You must respond ONLY with a strict JSON format exactly like this, nothing else:
         score = 0
         explanation = "Error parsing LLM evaluation. Defaulting to fail."
 
+    # Progress Cache Tracking
+    topic_id = chunk.topic_id
+    cache = db.query(models.ProgressCache).filter_by(user_id=current_user.id, topic_id=topic_id).first()
+    if not cache:
+        cache = models.ProgressCache(user_id=current_user.id, topic_id=topic_id, status="red")
+        db.add(cache)
+
     # SRS Mathematical Engine (SuperMemo-2 Inspired)
     if score >= 1:
         # Pass
+        cache.status = "green"
         review.consecutive_passes += 1
         review.ease_factor = max(1.3, review.ease_factor + 0.1)
         if review.consecutive_passes == 1:
@@ -76,6 +95,7 @@ You must respond ONLY with a strict JSON format exactly like this, nothing else:
             review.interval_days = int(max(1, review.interval_days * review.ease_factor))
     else:
         # Fail
+        cache.status = "red"
         review.consecutive_passes = 0
         review.ease_factor = max(1.3, review.ease_factor - 0.2)
         review.interval_days = 0 

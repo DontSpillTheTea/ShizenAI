@@ -1,88 +1,147 @@
 import React, { useState, useEffect } from 'react';
-import { uploadDocument, generateFlashcards, getUsers, assignTopic } from './api';
+import { uploadDocument, getUsers, assignTopic, getAdminHierarchy } from './api';
+import { TopicTree, TopicNode, buildTree } from './components/TopicTree';
 
 export default function AdminDashboard() {
   const [file, setFile] = useState<File | null>(null);
   const [topic, setTopic] = useState('');
-  const [topicId, setTopicId] = useState('');
-  const [users, setUsers] = useState<any[]>([]);
   const [status, setStatus] = useState('');
 
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  
+  const [treeData, setTreeData] = useState<TopicNode[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
+
+  // Load Users
   useEffect(() => {
     getUsers().then(setUsers).catch(console.error);
   }, []);
 
+  // Hydrate Tree when a user is selected (or general pool)
+  const loadTree = async (userId: string) => {
+    try {
+      const flat = await getAdminHierarchy(userId);
+      setTreeData(buildTree(flat));
+    } catch(err: any) {
+      console.error(err);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedUserId) {
+      loadTree(selectedUserId);
+      setSelectedTopics(new Set());
+    } else {
+       loadTree('');
+    }
+  }, [selectedUserId]);
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !topic) return;
-    setStatus('Uploading and chunking document via LangChain/PyMuPDF...');
+    setStatus('Processing Atomic Pipeline: Uploading, Vectorizing, and Synthesizing Flashcards...');
     try {
       const res = await uploadDocument(file, topic);
-      setTopicId(res.topic_id);
       setStatus(res.message);
-    } catch (err: any) { setStatus(err.message); }
+      loadTree(selectedUserId || ''); // reload Tree
+    } catch (err: any) { 
+      setStatus(err.message); 
+    }
   };
 
-  const handleGenerate = async () => {
-    if (!topicId) return;
-    setStatus('Prompting Local Llama 3 to generate core-concept questions...');
-    try {
-      const res = await generateFlashcards(topicId);
-      setStatus(res.message);
-    } catch (err: any) { setStatus(err.message); }
+  const handleToggleTopic = (id: string, isChecked: boolean) => {
+    const next = new Set(selectedTopics);
+    if (isChecked) next.add(id);
+    else next.delete(id);
+    setSelectedTopics(next);
   };
 
-  const handleAssign = async (userId: string) => {
-    if (!topicId) return;
-    setStatus('Assigning flashcard track to employee...');
+  const handleAssignSelected = async () => {
+    if (!selectedUserId) {
+      setStatus("Please select an employee first.");
+      return;
+    }
+    if (selectedTopics.size === 0) return;
+    
+    setStatus(`Assigning ${selectedTopics.size} topics to employee...`);
     try {
-      const res = await assignTopic(topicId, userId);
-      setStatus(res.message);
-    } catch (err: any) { setStatus(err.message); }
-  };
+        let count = 0;
+        for (const tid of selectedTopics) {
+            await assignTopic(tid, selectedUserId);
+            count++;
+        }
+        setStatus(`Successfully distributed ${count} topic trees to the employee.`);
+        loadTree(selectedUserId); // Reload tree to visually represent Assignment
+        setSelectedTopics(new Set()); // wipe selection
+    } catch (err: any) {
+        setStatus(err.message);
+    }
+  }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8 bg-white/5 border border-white/10 rounded-2xl mt-8">
+    <div className="max-w-6xl mx-auto p-6 space-y-8 mt-8">
       <div>
         <h2 className="text-3xl font-bold text-emerald-400">Employer Dashboard</h2>
-        <p className="text-gray-400 mt-2">Ingest company docs, Auto-Generate Flashcards via Llama 3, and Assign.</p>
+        <p className="text-gray-400 mt-2">One-Click Ingestion & Automated Competency Tracking</p>
       </div>
 
-      <form onSubmit={handleUpload} className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-2">Topic Category Tree</label>
-          <input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Server DevOps -> Log Ingestion" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-emerald-500" required />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-2">Source Document (.pdf, .docx, .txt)</label>
-          <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} className="w-full text-emerald-100" required />
-        </div>
-        <button type="submit" className="px-6 py-3 w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold uppercase tracking-wider rounded-lg transition-colors">1. Vectorize & Extract</button>
-      </form>
-
-      {topicId && (
-        <div className="p-6 bg-slate-900 border border-emerald-500/50 rounded-xl space-y-6">
-          <div className="flex justify-between items-center">
-             <p className="text-emerald-400 font-mono text-sm break-all">Topic: {topicId}</p>
-          </div>
-          
-          <button onClick={handleGenerate} className="px-6 py-3 w-full bg-blue-500 hover:bg-blue-400 text-black font-bold uppercase tracking-wider rounded-lg transition-colors">2. Dispatch Flashcard Autogeneration</button>
-          
-          <div className="pt-4 space-y-4 border-t border-slate-700">
-            <h3 className="text-gray-300 font-semibold uppercase tracking-wide text-sm">3. Distribute To Roster</h3>
-            <div className="grid grid-cols-2 gap-4">
-            {users.map(u => (
-              <button key={u.id} onClick={() => handleAssign(u.id)} className="px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg hover:border-emerald-400 text-white flex items-center justify-between transition-colors">
-                <span>{u.name} (Employee)</span>
-                <span className="text-emerald-500 text-sm">Assign &rarr;</span>
-              </button>
-            ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        {/* LEFT COLUMN: Atomic Ingestion Pipeline */}
+        <div className="bg-white/5 border border-white/10 p-6 rounded-2xl space-y-4">
+          <h3 className="text-xl font-bold text-white mb-4">1. One-Click Ingestion</h3>
+          <form onSubmit={handleUpload} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">Topic Category Track</label>
+              <input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Developer -> Deployment -> Docker" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-emerald-500" required />
             </div>
-          </div>
+            <div className="border-2 border-dashed border-emerald-500/30 p-8 text-center rounded-xl bg-slate-900 transition-hover hover:border-emerald-500/80">
+              <label className="block text-sm font-semibold text-emerald-300 mb-2 cursor-pointer">
+                Select Document (.pdf, .docx, .txt)
+                <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} className="hidden" required />
+              </label>
+              <p className="text-xs text-emerald-500 font-mono">{file ? file.name : "Click to Browse File"}</p>
+            </div>
+            <button type="submit" className="px-6 py-4 w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold uppercase tracking-wider rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]">Atomic Process: Vectorize & Synthesize</button>
+          </form>
+          {status && <div className="p-4 bg-slate-900 rounded-lg text-sm font-mono text-emerald-300 border border-emerald-900/50 mt-4">{status}</div>}
         </div>
-      )}
 
-      {status && <div className="p-4 bg-black/50 rounded-lg text-sm font-mono text-emerald-200 border border-emerald-900/50">{status}</div>}
+        {/* RIGHT COLUMN: Assignment Matrix & Tree */}
+        <div className="bg-white/5 border border-white/10 p-6 rounded-2xl space-y-4 flex flex-col">
+          <h3 className="text-xl font-bold text-white mb-4">2. Assignment Matrix</h3>
+          
+          <select 
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-blue-500"
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
+          >
+             <option value="">-- Employee Registry: View Competencies --</option>
+             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+
+          <div className="flex-grow bg-slate-900 border border-slate-800 rounded-lg p-4 overflow-y-auto min-h-[300px] max-h-[400px]">
+             {selectedUserId ? (
+                 <>
+                   <p className="text-xs text-gray-500 mb-4 uppercase tracking-wider border-b border-gray-800 pb-2">Employee Readiness Matrix</p>
+                   <TopicTree data={treeData} onSelectTopic={handleToggleTopic} />
+                 </>
+             ) : (
+                 <p className="text-sm text-gray-500 text-center mt-10">Select an employee to expand their knowledge tree.</p>
+             )}
+          </div>
+
+          <button 
+             onClick={handleAssignSelected} 
+             disabled={!selectedUserId || selectedTopics.size === 0}
+             className="px-6 py-4 w-full bg-blue-600 disabled:bg-slate-800 disabled:text-gray-500 hover:bg-blue-500 text-white font-bold uppercase tracking-wider rounded-lg transition-colors mt-4"
+          >
+             {selectedTopics.size > 0 ? `Push ${selectedTopics.size} Topics to SRS Queue` : `Select Topic Nodes to Distribute`}
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 }

@@ -22,10 +22,11 @@ export async function login(username: string, password: string) {
   return res.json();
 }
 
-export async function uploadDocument(file: File, topicTitle: string) {
+export async function uploadDocument(file: File, topicTitle: string, parentTopicId?: string) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('topic_title', topicTitle);
+  if (parentTopicId) formData.append('parent_topic_id', parentTopicId);
   
   const token = localStorage.getItem('token');
   const res = await fetch(`${API_URL}/api/v1/admin/upload`, {
@@ -34,6 +35,16 @@ export async function uploadDocument(file: File, topicTitle: string) {
     body: formData
   });
   if (!res.ok) throw new Error('Upload failed');
+  return res.json();
+}
+
+export async function getAdminHierarchy(userId?: string) {
+  const token = localStorage.getItem('token');
+  const url = userId ? `${API_URL}/api/v1/admin/hierarchy/topics?user_id=${userId}` : `${API_URL}/api/v1/admin/hierarchy/topics`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error('Failed to fetch topics');
   return res.json();
 }
 
@@ -67,10 +78,23 @@ export async function getQueue() {
   return res.json();
 }
 
-export async function evaluateAnswer(flashcardId: string, answer: string) {
+export async function getEmployeeHierarchy() {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}/api/v1/employee/hierarchy/topics`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error('Queue failed');
+  return res.json();
+}
+
+export async function submitEvaluation(flashcardId: string, answer: string) {
+  const token = localStorage.getItem('token');
   const res = await fetch(`${API_URL}/api/v1/employee/evaluate`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}` 
+    },
     body: JSON.stringify({ flashcard_id: flashcardId, user_answer: answer })
   });
   if (!res.ok) throw new Error('Evaluation failed');

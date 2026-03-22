@@ -15,16 +15,21 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     reviews = relationship("UserReview", back_populates="user")
+    assignments = relationship("UserAssignment", back_populates="user")
+    progress = relationship("ProgressCache", back_populates="user")
 
 class Topic(Base):
     __tablename__ = "topics"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     parent_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), nullable=True)
+    path = Column(String, nullable=False, default="", index=True) # Materialized path e.g. "uuid/uuid"
     title = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     subtopics = relationship("Topic", backref="parent", remote_side=[id])
     chunks = relationship("KnowledgeChunk", back_populates="topic")
+    assignments = relationship("UserAssignment", back_populates="topic")
+    progress = relationship("ProgressCache", back_populates="topic")
 
 class KnowledgeChunk(Base):
     __tablename__ = "knowledge_chunks"
@@ -60,3 +65,22 @@ class UserReview(Base):
 
     user = relationship("User", back_populates="reviews")
     flashcard = relationship("Flashcard", back_populates="reviews")
+
+class UserAssignment(Base):
+    __tablename__ = "user_assignments"
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    topic_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), primary_key=True)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="assignments")
+    topic = relationship("Topic", back_populates="assignments")
+
+class ProgressCache(Base):
+    __tablename__ = "progress_cache"
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    topic_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), primary_key=True)
+    status = Column(String, default="gray", nullable=False) # 'gray', 'red', 'green'
+    last_updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="progress")
+    topic = relationship("Topic", back_populates="progress")
