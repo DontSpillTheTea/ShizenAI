@@ -9,7 +9,7 @@ from database import get_db, engine, Base
 import models
 import services
 import auth
-from routers import admin, employee
+from routers import admin, employee, omi
 
 from sqlalchemy import text
 
