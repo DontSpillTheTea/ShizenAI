@@ -1,42 +1,78 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-export interface RecordItem {
-  id: string;
-  summary: string;
-  created_at: string;
+function getHeaders() {
+  const token = localStorage.getItem('token');
+  return {
+    'Authorization': token ? `Bearer ${token}` : '',
+    'Content-Type': 'application/json'
+  };
 }
 
-export interface UnifiedQueryResponse {
-  text: string;
-  source_origin: string;
-  similarity_score: number | null;
-  audio_url: string | null;
+export async function login(username: string, password: string) {
+  const formData = new URLSearchParams();
+  formData.append('username', username);
+  formData.append('password', password);
+  
+  const res = await fetch(`${API_URL}/api/v1/auth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData
+  });
+  if (!res.ok) throw new Error('Login failed');
+  return res.json();
 }
 
-export const api = {
-  ingest: async (text: string) => {
-    const res = await fetch(`${API_BASE}/api/v1/ingest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-    if (!res.ok) throw new Error('Ingest failed');
-    return res.json();
-  },
+export async function uploadDocument(file: File, topicTitle: string) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('topic_title', topicTitle);
   
-  getRecords: async (limit: number = 50): Promise<RecordItem[]> => {
-    const res = await fetch(`${API_BASE}/api/v1/records?limit=${limit}`);
-    if (!res.ok) throw new Error('Failed to fetch records');
-    return res.json();
-  },
-  
-  query: async (queryText: string, mode: string = 'text', limit: number = 5): Promise<UnifiedQueryResponse> => {
-    const res = await fetch(`${API_BASE}/api/v1/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: queryText, limit, mode })
-    });
-    if (!res.ok) throw new Error('Query failed');
-    return res.json();
-  }
-};
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}/api/v1/admin/upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  return res.json();
+}
+
+export async function generateFlashcards(topicId: string) {
+  const res = await fetch(`${API_URL}/api/v1/admin/flashcards/generate/${topicId}`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  if (!res.ok) throw new Error('Generation failed');
+  return res.json();
+}
+
+export async function getUsers() {
+  const res = await fetch(`${API_URL}/api/v1/admin/users`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Fetch users failed');
+  return res.json();
+}
+
+export async function assignTopic(topicId: string, targetUserId: string) {
+  const res = await fetch(`${API_URL}/api/v1/admin/assign?topic_id=${topicId}&target_user_id=${targetUserId}`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  if (!res.ok) throw new Error('Assignment failed');
+  return res.json();
+}
+
+export async function getQueue() {
+  const res = await fetch(`${API_URL}/api/v1/employee/queue`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Fetch queue failed');
+  return res.json();
+}
+
+export async function evaluateAnswer(flashcardId: string, answer: string) {
+  const res = await fetch(`${API_URL}/api/v1/employee/evaluate`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ flashcard_id: flashcardId, user_answer: answer })
+  });
+  if (!res.ok) throw new Error('Evaluation failed');
+  return res.json();
+}

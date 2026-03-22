@@ -1,312 +1,87 @@
-import { useState, useEffect, useRef } from 'react';
-import { api, RecordItem, UnifiedQueryResponse } from './api';
+import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './AuthContext';
+import { login } from './api';
+import AdminDashboard from './AdminDashboard';
+import EmployeeDashboard from './EmployeeDashboard';
 
-// For Web Speech API types
-declare global {
-  interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
-  }
-}
+function LoginScreen() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [err, setErr] = useState('');
+  const { login: setAuth } = useAuth();
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  source_origin?: string;
-  similarity_score?: number | null;
-  audio_url?: string | null;
-}
-
-function App() {
-  const [activeTab, setActiveTab] = useState<'ingest' | 'search' | 'dashboard'>('search');
-  
-  // Ingest state
-  const [ingestText, setIngestText] = useState('');
-  const [ingestLoading, setIngestLoading] = useState(false);
-  const [ingestStatus, setIngestStatus] = useState<{success: boolean, msg: string} | null>(null);
-  
-  // Dashboard state
-  const [records, setRecords] = useState<RecordItem[]>([]);
-  const [recordsLoading, setRecordsLoading] = useState(false);
-  
-  // Search / Transcript state
-  const [query, setQuery] = useState('');
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  
-  const chatBottomRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-
-  useEffect(() => {
-    if (activeTab === 'dashboard') {
-      fetchRecords();
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatHistory]);
-
-  const fetchRecords = async () => {
-    setRecordsLoading(true);
-    try {
-      const data = await api.getRecords();
-      setRecords(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setRecordsLoading(false);
-    }
-  };
-
-  const handleIngest = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ingestText.trim()) return;
-    setIngestLoading(true);
-    setIngestStatus(null);
     try {
-      await api.ingest(ingestText);
-      setIngestStatus({ success: true, msg: 'Successfully ingested and summarized!' });
-      setIngestText('');
-    } catch (e) {
-      setIngestStatus({ success: false, msg: 'Failed to ingest data.' });
-    } finally {
-      setIngestLoading(false);
-    }
-  };
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-
-  if (recognition) {
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      submitQuery(transcript, 'voice');
-    };
-    
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-    
-    recognition.onerror = (e: any) => {
-      console.error('Speech recognition error', e);
-      setIsListening(false);
-    };
-  }
-
-  const handleMicrophoneClick = () => {
-    if (!recognition) {
-      alert("Your browser does not support the Web Speech API.");
-      return;
-    }
-    if (isListening) {
-      recognition.stop();
-      setIsListening(false);
-    } else {
-      recognition.start();
-      setIsListening(true);
-    }
-  };
-
-  const handleSearchSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-    submitQuery(query, 'text');
-    setQuery('');
-  };
-
-  const submitQuery = async (qText: string, mode: string) => {
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: qText };
-    setChatHistory(prev => [...prev, userMsg]);
-    setSearchLoading(true);
-    
-    try {
-      const res = await api.query(qText, mode);
-      const asstMsg: ChatMessage = { 
-        id: (Date.now() + 1).toString(), 
-        role: 'assistant', 
-        content: res.text,
-        source_origin: res.source_origin,
-        similarity_score: res.similarity_score,
-        audio_url: res.audio_url
-      };
-      setChatHistory(prev => [...prev, asstMsg]);
-      
-      if (res.audio_url && audioRef.current) {
-        const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        audioRef.current.src = `${API_BASE}${res.audio_url}`;
-        audioRef.current.play().catch(e => console.error("Mock Audio playback failed natively:", e));
-      }
-    } catch (e) {
-      console.error(e);
-      setChatHistory(prev => [...prev, { id: (Date.now() + 2).toString(), role: 'assistant', content: "An error occurred fetching the response." }]);
-    } finally {
-      setSearchLoading(false);
-    }
+      const res = await login(username, password);
+      setAuth(res.access_token, res.name, res.role);
+    } catch { setErr('Invalid credentials - try admin/admin or employee/employee'); }
   };
 
   return (
-    <div className="min-h-screen bg-background text-text flex flex-col items-center py-10 px-4">
-      <header className="mb-10 text-center">
-        <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-500">
-          ShizenAI
-        </h1>
-        <p className="text-textDim mt-2">Hybrid Orchestration & Inclusive I/O</p>
+    <div className="flex bg-[#020617] min-h-screen items-center justify-center font-sans">
+      <form onSubmit={handleLogin} className="p-10 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl space-y-8 w-96 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl rounded-tr-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl rounded-bl-3xl"></div>
+        
+        <div className="relative z-10 space-y-2">
+            <h2 className="text-4xl font-black tracking-tight text-white text-center flex items-center justify-center gap-3">
+            <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            ShizenAI
+            </h2>
+            <p className="text-center text-slate-400 font-mono text-xs tracking-widest uppercase">Phase 3: Deep Verification</p>
+        </div>
+
+        <div className="space-y-4 relative z-10">
+            {err && <p className="text-red-400 text-sm text-center font-mono">{err}</p>}
+            <input className="w-full bg-black/50 text-white px-4 py-3.5 rounded-xl border border-slate-700/50 focus:border-emerald-500/50 outline-none transition-colors" placeholder="Username (admin or employee)" value={username} onChange={e=>setUsername(e.target.value)}/>
+            <input type="password" className="w-full bg-black/50 text-white px-4 py-3.5 rounded-xl border border-slate-700/50 focus:border-emerald-500/50 outline-none transition-colors" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)}/>
+        </div>
+        <button className="relative z-10 w-full bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider py-4 text-sm rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)]">Sign In Securely</button>
+      </form>
+    </div>
+  );
+}
+
+function MainLayout() {
+  const { user, logout } = useAuth();
+  
+  if (!user) return <LoginScreen />;
+  
+  return (
+    <div className="min-h-screen bg-[#020617] text-slate-300 font-sans selection:bg-emerald-500/30">
+      <header className="border-b border-white/5 bg-white/5 backdrop-blur-2xl sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+              <svg className="w-6 h-6 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">ShizenAI <span className="text-emerald-500 font-light">| Verification Engine</span></h1>
+          </div>
+          
+          <div className="flex items-center gap-8 text-sm">
+            <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-black/30 border border-white/5">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></div>
+              <span className="font-mono text-gray-300 flex items-center gap-2">
+                 <span className="text-emerald-400 capitalize">{user.role}</span> &mdash; {user.name}
+              </span>
+            </div>
+            <button onClick={logout} className="text-gray-400 hover:text-white font-semibold transition-colors uppercase tracking-wider text-xs">Sign Out</button>
+          </div>
+        </div>
       </header>
 
-      <div className="flex gap-4 mb-8">
-        <button 
-          onClick={() => setActiveTab('search')}
-          className={`px-4 py-2 rounded-md transition ${activeTab === 'search' ? 'bg-primary text-white' : 'bg-surface text-textDim hover:text-white'}`}
-        >
-          Transcript Chat
-        </button>
-        <button 
-          onClick={() => setActiveTab('ingest')}
-          className={`px-4 py-2 rounded-md transition ${activeTab === 'ingest' ? 'bg-primary text-white' : 'bg-surface text-textDim hover:text-white'}`}
-        >
-          Ingest Data
-        </button>
-        <button 
-          onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2 rounded-md transition ${activeTab === 'dashboard' ? 'bg-primary text-white' : 'bg-surface text-textDim hover:text-white'}`}
-        >
-          DB Layout
-        </button>
-      </div>
-
-      <main className="w-full max-w-3xl flex-grow flex flex-col">
-        {activeTab === 'ingest' && (
-          <div className="card animate-[fadeIn_0.3s_ease-out]">
-            <h2 className="text-2xl font-semibold mb-4 text-white">Ingest Raw Data</h2>
-             <form onSubmit={handleIngest}>
-              <textarea
-                value={ingestText}
-                onChange={(e) => setIngestText(e.target.value)}
-                placeholder="Paste your raw, unstructured text here..."
-                rows={8}
-                className="input mb-4 resize-y"
-              />
-              <button disabled={ingestLoading || !ingestText.trim()} type="submit" className="btn w-full">
-                {ingestLoading ? 'Processing...' : 'Submit & Summarize'}
-              </button>
-            </form>
-            {ingestStatus && (
-              <div className={`mt-4 p-3 rounded-md border ${ingestStatus.success ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-red-900/20 border-red-800 text-red-400'}`}>
-                {ingestStatus.msg}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'search' && (
-          <div className="card flex flex-col flex-grow animate-[fadeIn_0.3s_ease-out] relative pb-20 overflow-hidden" style={{ minHeight: '600px' }}>
-            <h2 className="text-2xl font-semibold mb-2 text-white border-b border-gray-800 pb-2">Transcript View</h2>
-            
-            <div className="flex-grow overflow-y-auto mb-4 space-y-4 pr-2 mt-4 custom-scrollbar">
-              {chatHistory.length === 0 ? (
-                <div className="text-center text-textDim py-10">Ask a question using text or your voice.</div>
-              ) : (
-                chatHistory.map(msg => (
-                  <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                    <div className={`max-w-[80%] p-4 rounded-xl ${msg.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-[#2a2a2a] text-gray-200 rounded-bl-none'}`}>
-                      {msg.role === 'assistant' && msg.source_origin && (
-                        <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider">
-                          {msg.source_origin === 'local_db' ? (
-                            <span className="flex items-center gap-1 text-green-400">
-                              <span className="w-2 h-2 rounded-full bg-green-400"></span> Internal DB ({(msg.similarity_score! * 100).toFixed(1)}%)
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-blue-400">
-                              <span className="w-2 h-2 rounded-full bg-blue-400"></span> External Research Mock
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-              {searchLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-[#2a2a2a] text-gray-400 p-4 rounded-xl rounded-bl-none animate-pulse">
-                    Routing & processing query...
-                  </div>
-                </div>
-              )}
-              <div ref={chatBottomRef} />
-            </div>
-
-            {/* Input Area */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface border-t border-gray-800">
-              <form onSubmit={handleSearchSubmit} className="flex gap-2 relative items-center">
-                <input 
-                  type="text" 
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Ask a question..." 
-                  className="input flex-grow pr-12"
-                  disabled={searchLoading}
-                />
-                <button 
-                  type="button" 
-                  onClick={handleMicrophoneClick}
-                  disabled={searchLoading}
-                  className={`absolute right-16 p-2 rounded-full transition ${isListening ? 'bg-red-500/20 text-red-500 animate-pulse' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-                  title="Tap-to-Talk"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                  </svg>
-                </button>
-                <button disabled={searchLoading || (!query.trim() && !isListening)} type="submit" className="btn whitespace-nowrap px-6">
-                  {isListening ? 'Listening...' : 'Send'}
-                </button>
-              </form>
-            </div>
-            {/* Hidden audio element for TTS */}
-            <audio ref={audioRef} style={{ display: 'none' }} />
-          </div>
-        )}
-
-        {activeTab === 'dashboard' && (
-          <div className="card animate-[fadeIn_0.3s_ease-out]">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold text-white">Stored Summaries</h2>
-              <button onClick={fetchRecords} disabled={recordsLoading} className="text-primary hover:text-blue-400 text-sm">
-                Refresh
-              </button>
-            </div>
-            
-            {recordsLoading ? (
-               <p className="text-textDim text-center">Loading records...</p>
-            ) : records.length > 0 ? (
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                {records.map(record => (
-                  <div key={record.id} className="p-4 bg-background border border-gray-800 rounded-md">
-                    <p className="text-gray-200 mb-3">{record.summary}</p>
-                    <div className="text-xs text-textDim">
-                      Added: {new Date(record.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-textDim text-center py-8">No records found. Try ingesting some data first!</p>
-            )}
-          </div>
-        )}
+      <main className="max-w-6xl mx-auto p-6">
+        {user.role === 'admin' ? <AdminDashboard /> : <EmployeeDashboard />}
       </main>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainLayout />
+    </AuthProvider>
+  );
+}
