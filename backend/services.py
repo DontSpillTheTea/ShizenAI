@@ -1,56 +1,60 @@
 import os
 import time
+import math
+import hashlib
+import re
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-AI_PROVIDER = os.getenv("AI_PROVIDER", "local")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434/v1")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy-key-for-local")
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 
-# Nomic-embed-text generates 768-dimensional embeddings by default. 
-# text-embedding-3-small generates 1536.
-# We will use text-embedding-3-small dimensions and pad/project or just rely on OpenAI if cloud.
-# Wait, user PRD originally said 1536. We'll ensure Nomic can be used or padded, or just configure it properly.
+def _hash_embedding_768(text: str) -> list[float]:
+    """
+    Deterministic lightweight 768-d embedding fallback.
+    Keeps pgvector schema compatible without requiring model downloads.
+    """
+    dims = 768
+    vec = [0.0] * dims
+    tokens = re.findall(r"[a-zA-Z0-9_]+", (text or "").lower())
 
-def get_client() -> OpenAI:
-    if AI_PROVIDER == "local":
-        return OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
-    else:
-        return OpenAI(api_key=OPENAI_API_KEY)
+    if not tokens:
+        return vec
 
-def local_llm_generate(sys_prompt: str, user_prompt: str) -> str:
-    client = get_client()
-    model = "qwen2.5:1.5b-instruct" if AI_PROVIDER == "local" else "gpt-4o-mini"
-    
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        max_tokens=512,
-        temperature=0.3
-    )
-    return response.choices[0].message.content.strip()
+    for token in tokens:
+        digest = hashlib.sha256(token.encode("utf-8")).digest()
+        # Spread each token across four dimensions with signed updates.
+        for offset in (0, 8, 16, 24):
+            idx = int.from_bytes(digest[offset:offset + 2], "big") % dims
+            sign = 1.0 if (digest[offset + 2] & 1) == 0 else -1.0
+            magnitude = 0.5 + (digest[offset + 3] / 255.0)
+            vec[idx] += sign * magnitude
+
+    norm = math.sqrt(sum(v * v for v in vec))
+    if norm > 0:
+        vec = [v / norm for v in vec]
+    return vec
 
 def generate_summary(text: str) -> str:
-    sys = "You are a concise summarizer. Provide a brief, one-paragraph summary of the user's text."
-    return local_llm_generate(sys, text)
+    if not text:
+        return ""
+    if not PERPLEXITY_API_KEY:
+        # Graceful fallback if key is missing in a local/dev environment.
+        return text[:600]
+
+    sys = (
+        "You are a concise summarizer. Return one short paragraph, plain text only. "
+        "Do not include markdown or bullet points."
+    )
+    return external_perplexity_chat(
+        system_prompt=sys,
+        messages=[{"role": "user", "content": text[:6000]}],
+        model_name="sonar"
+    )
 
 def generate_embedding(text: str) -> list[float]:
-    client = get_client()
-    model = "nomic-embed-text" if AI_PROVIDER == "local" else "text-embedding-3-small"
-    
-    response = client.embeddings.create(
-        model=model,
-        input=text
-    )
-    embedding = response.data[0].embedding
-    
-    return embedding
+    return _hash_embedding_768(text)
 
 def external_perplexity_chat(system_prompt: str, messages: list[dict], model_name: str = "sonar") -> str:
     if not PERPLEXITY_API_KEY:

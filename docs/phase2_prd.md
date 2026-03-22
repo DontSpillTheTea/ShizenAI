@@ -29,7 +29,7 @@ The React client must handle users who cannot hear or prefer not to speak.
 ### 3.3 Mocked Providers (Phase 2 Scaffolding)
 To maintain development speed, the following services are mocked:
 - **ElevenLabs Mock:** A backend function that simulates audio generation delay and returns a `mock_audio_url`.
-- **Perplexity Mock:** A function that utilizes the local Llama 3 model with a specific "Research Assistant" system prompt to simulate an external web-search result.
+- **Perplexity Mock:** A function that utilizes the Perplexity API with a specific "Research Assistant" system prompt to simulate an external web-search result.
 
 ## 4. Technical Architecture (Multimodal Flow)
 ```mermaid
@@ -69,4 +69,4 @@ sequenceDiagram
 ## 6. Development Priorities
 1. **Backend Confidence Logic:** Implement the if/else gateway in the FastAPI endpoint.
 2. **Multimodal Frontend:** Add the text-entry field alongside the Web Speech API button.
-3. **Llama 3 "Research" Prompt:** Configure a specific Ollama prompt to act as the "External Search" mock, providing a different "personality" than the internal summarizer.
+3. **Perplexity "Research" Prompt:** Configure a specific Perplexity API prompt to act as the "External Search" mock, providing a different "personality" than the internal summarizer.

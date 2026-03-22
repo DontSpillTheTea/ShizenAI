@@ -12,28 +12,17 @@ services:
     volumes:
       - shizen_pg_data:/var/lib/postgresql/data
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - shizen_ollama_models:/root/.ollama
-
   backend:
     build:
       context: ./backend
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/shizenai
-      - AI_PROVIDER=local
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-    env_file:
-      - perplexity_key.env
-      - elevenlabs_key.env
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/shizenai}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
     depends_on:
       - postgres
-      - ollama
     volumes:
       - ./backend:/app
 
@@ -43,7 +32,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     depends_on:
       - backend
     volumes:
@@ -52,6 +41,4 @@ services:
 
 volumes:
   shizen_pg_data:
-    external: true
-  shizen_ollama_models:
     external: true

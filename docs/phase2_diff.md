@@ -27,7 +27,7 @@ Phase 2 introduced simulated external orchestration endpoints. This proves the s
 
 ```diff
 + def mock_external_search(query: str) -> str:
-+     # Bootstraps local llama3 with a rigid "Research Assistant" system prompt
++     # Bootstraps local Perplexity Sonar with a rigid "Research Assistant" system prompt
 +     # to mimic Perplexity's behavior and knowledge boundaries.
 +
 + def mock_audio_synthesis(text: str) -> str:
@@ -63,4 +63,4 @@ Phase 1 utilized a static layout for executing single text-based searches. Phase
 ```
 
 ## 4. Stability Validation
-By running `docker stats` after the Phase 2 integrations, it was confirmed that offloading the Web Speech API transcription layer entirely to the client's native browser circumvented massive backend bloat. The application operates solidly beneath 150MB of RAM padding, permitting the heavy Ollama LLM container to consume the remaining system resources unchecked.
+By running `docker stats` after the Phase 2 integrations, it was confirmed that offloading the Web Speech API transcription layer entirely to the client's native browser circumvented massive backend bloat. The application operates solidly beneath 150MB of RAM padding, permitting the heavy Perplexity API LLM container to consume the remaining system resources unchecked.

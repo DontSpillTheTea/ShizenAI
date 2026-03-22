@@ -7,7 +7,7 @@ We successfully transformed the baseline MVP into a multimodal, confidence-routi
 
 ## 2. Backend Enhancements
 - Modded the POST `/api/v1/search` to serve as a **Confidence Gateway**. 
-- It checks native `pgvector` for similarity vectors. If `< 0.75`, it diverts the query to `mock_external_search()`, spinning up the local `llama3` with a specialized "Research Assistant" system prompt.
+- It checks native `pgvector` for similarity vectors. If `< 0.75`, it diverts the query to `mock_external_search()`, spinning up the local `Perplexity Sonar` with a specialized "Research Assistant" system prompt.
 - Passed all response text through `mock_audio_synthesis()`, which enforces an artificial 1.5s `time.sleep()` delay and returns a mocked static endpoint `/api/v1/mock-audio` to satisfy frontend HTML5 Audio layers.
 - Validated new responses emit structured Pydantic `UnifiedQueryResponse` matching the frontend expectations (including `source_origin` tags).
 

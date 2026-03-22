@@ -58,7 +58,7 @@ resource "google_compute_instance" "app" {
 
   # Bootstrap: installs Docker + Docker Compose and starts the app.
   # To use: add your repo URL and env vars below or pass via metadata.
-  metadata_startup_script = templatefile("${path.module}/startup.sh.tpl", {
+  metadata_startup_script = replace(templatefile("${path.module}/startup.sh.tpl", {
     environment = var.environment
     db_host     = google_sql_database_instance.postgres.private_ip_address
     db_port     = "5432"
@@ -66,7 +66,7 @@ resource "google_compute_instance" "app" {
     db_user     = var.db_user
     db_password = var.db_password
     app_port    = tostring(var.app_port)
-  })
+  }), "\r\n", "\n")
 
   depends_on = [
     google_project_service.compute,

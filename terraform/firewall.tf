@@ -38,18 +38,18 @@ resource "google_compute_firewall" "allow_https" {
   target_tags   = ["shizen-app"]
 }
 
-# App port — direct access if not behind a reverse proxy
-resource "google_compute_firewall" "allow_app_port" {
+# App ports — direct access to frontend and backend
+resource "google_compute_firewall" "allow_app_ports" {
   project     = var.project_id
-  name        = "shizen-allow-app-port-${var.environment}"
+  name        = "shizen-allow-app-ports-${var.environment}"
   network     = google_compute_network.vpc.id
-  description = "Allow direct access to FastAPI/frontend port — disable once Nginx is configured"
+  description = "Allow direct access to Frontend (5173) and Backend (8000)"
   direction   = "INGRESS"
   priority    = 1000
 
   allow {
     protocol = "tcp"
-    ports    = [tostring(var.app_port)]
+    ports    = ["5173", "8000"]
   }
 
   source_ranges = ["0.0.0.0/0"]

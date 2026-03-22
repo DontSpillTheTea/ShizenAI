@@ -16,7 +16,7 @@ Managers need a frictionless way to turn static company wikis into active traini
 
 * **Multi-Format Document Upload:** Frontend UI supporting `.pdf`, `.docx`, and `.txt` file ingestion.
 * **Semantic Text Splitter:** The backend must chunk uploaded documents into logical, 500–1000 token segments using a library like LangChain's `RecursiveCharacterTextSplitter`. This prevents context-window overflow and ensures flashcard questions are bite-sized.
-* **Vectorization & Storage:** Pass the chunks to the local Llama 3 model for summarization and the `nomic-embed-text` model for vectorization, storing the results in `pgvector`.
+* **Vectorization & Storage:** Pass the chunks to Perplexity for summarization and the `deterministic 768-d embedding` model for vectorization, storing the results in `pgvector`.
 * **Topic Curation & Assignment:** Managers can group vectorized chunks into "Topics" (e.g., *DevOps -> CI/CD*) and assign these nested topics to specific employees, generating a pending task list.
 
 ## 3. Employee Core: The SRS Verification Loop
@@ -25,7 +25,7 @@ Employees need an active, daily review interface that proves their fluency.
 * **The Daily Queue:** A frontend dashboard displaying flashcards due for review today, prioritized by the SRS algorithm.
 * **Flashcard Generation:** For each assigned chunk, the backend dynamically generates a specific question probing the core concept of that text.
 * **Multi-Modal Input:** The employee answers the question using the Web Speech API (Voice) or a text box (Fallback).
-* **The LLM "Judge" Engine:** The FastAPI backend takes three inputs: (1) The Question, (2) The Ground-Truth Chunk from Postgres, and (3) The Employee's Answer. It prompts a strictly formatted Llama 3 instance to output a binary `1` (Pass) or `0` (Fail), alongside a 1-sentence explanation of what was missed.
+* **The LLM "Judge" Engine:** The FastAPI backend takes three inputs: (1) The Question, (2) The Ground-Truth Chunk from Postgres, and (3) The Employee's Answer. It prompts a strictly formatted Perplexity response to output a binary `1` (Pass) or `0` (Fail), alongside a 1-sentence explanation of what was missed.
 
 ## 4. The Spaced Repetition (SRS) Engine
 The backend must mathematically track and schedule knowledge decay.
@@ -47,4 +47,4 @@ The database must be expanded to handle relational state alongside semantic vect
 ## 6. Success Metrics & Constraints
 * **Performance:** The LLM Judge must evaluate the employee's answer and return the Pass/Fail state in under **3 seconds** locally.
 * **Accuracy:** The Semantic Splitter must maintain complete sentences and logical paragraphs without cutting off mid-concept.
-* **Infrastructure:** All components (Frontend, FastAPI, Postgres, Ollama) must continue to run stably within the 32GB RAM limit of the local Dockerized environment.
+* **Infrastructure:** All components (Frontend, FastAPI, Postgres, Perplexity API) must continue to run stably within the 32GB RAM limit of the local Dockerized environment.

@@ -6,13 +6,13 @@
 This PR hardens the ShizenAI local development experience by migrating ephemeral bounded Docker volumes to explicit external named volumes, protecting massive ML data assets from accidental wipe commands. It also scaffolds mock documents for multi-modal ingestion tests.
 
 ## 1. Explicit External Volumes
-- Transitioned PostgreSQL and Ollama Docker volumes from implicit project names to strictly decoupled external volumes: `shizen_pg_data` and `shizen_ollama_models`.
+- Transitioned PostgreSQL and Perplexity API Docker volumes from implicit project names to strictly decoupled external volumes: `shizen_pg_data` and `shizen_perplexity_models`.
 - Updated `docker-compose.yml` to rely on `external: true`, stripping Docker Compose's ability to delete these volumes during a standard `docker compose down -v` teardown.
 
 ## 2. Infrastructure Teardown Rules
-- **Safe Command (`docker compose down`):** Destroys networking and containers but securely bypasses the external Postgres/Ollama volumes.
+- **Safe Command (`docker compose down`):** Destroys networking and containers but securely bypasses the external Postgres/Perplexity API volumes.
 - **Destructive Warning (`docker compose down -v`):** Now explicitly documented in `README.md`. While it deletes non-external and bridged volumes, it is physically restricted from destroying the explicit LLM and relational weights.
-- **Total Wipe Command:** Requires the developer to manually target `docker volume rm shizen_pg_data shizen_ollama_models`, satisfying the "intent" requirement of the PRD.
+- **Total Wipe Command:** Requires the developer to manually target `docker volume rm shizen_pg_data shizen_perplexity_models`, satisfying the "intent" requirement of the PRD.
 
 ## 3. Mock Data Sandbox
 - Scaffolding set up under `/test/dummy/mock/`.
@@ -22,5 +22,5 @@ This PR hardens the ShizenAI local development experience by migrating ephemeral
   - `apple_strudel.txt`
 
 ## PR Review Notes
-- **Llama Weights Verification**: 5GB inference bounds are protected. Developers can confidently run `down -v` to clear cached UI/Python networking states without sacrificing 30 minutes to model downloads.
+- **AI Runtime Verification**: Container startup remains lightweight for demos. Developers can confidently run `down -v` to clear cached UI/Python networking states without model-download delays.
 - **pgvector State Verification**: Employee SRS matrices and Knowledge Checklists seamlessly survive compose rebuilds.

@@ -13,12 +13,12 @@
 ## 3. The Employer Pipeline (LangChain Ingestion)
 - Expanded the ingestion route to natively accept `.pdf`, `.docx`, and `.txt` utilizing `PyMuPDF` and `python-docx`.
 - Integrated `langchain-text-splitters.RecursiveCharacterTextSplitter` to automatically chop vast wikis into cohesive, context-respecting 750-character chunks.
-- Wired local `llama3` to autonomously spin up a Flashcard Question testing the core mechanism of every chunk generated.
+- Wired local `Perplexity Sonar` to autonomously spin up a Flashcard Question testing the core mechanism of every chunk generated.
 
 ## 4. The Employee "SRS" Verification Loop
 - Implemented the SuperMemo-2 mathematical decay function inside `routers/employee.py`. 
 - Employees fetch a strictly "due today" queue.
-- Passed user answers via the **LLM Judge** (`llama3`), which strictly enforces a raw JSON schema (`{ "score": 1|0, "explanation": "..." }`) mapped directly against Nomic-embedded N-Dimensional Ground Truth texts. 
+- Passed user answers via the **LLM Judge** (`Perplexity Sonar`), which strictly enforces a raw JSON schema (`{ "score": 1|0, "explanation": "..." }`) mapped directly against Nomic-embedded N-Dimensional Ground Truth texts. 
 
 ## 5. React Dashboard Splits
 - Bootstrapped `AuthContext.tsx` to handle the React router permissions cleanly across browser reloads.

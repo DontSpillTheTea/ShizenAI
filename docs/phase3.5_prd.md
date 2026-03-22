@@ -10,8 +10,8 @@ The Manager interface must move from "granular input" to "bulk oversight."
 - **Unified Upload:** A single "Drop Zone" supporting bulk uploads (`.pdf`, `.docx`, `.txt`).
 - **Atomic Automation:** A single "Process" button that triggers:
   - **Semantic Chunking:** Breaking documents into logical 500-token nodes.
-  - **Vectorization:** Generating 768-dim embeddings via `nomic-embed-text`.
-  - **Flashcard Synthesis:** Llama 3 generates a contextually orthogonal question for every chunk automatically.
+  - **Vectorization:** Generating 768-dim embeddings via `deterministic 768-d embedding`.
+  - **Flashcard Synthesis:** Perplexity generates a contextually orthogonal question for every chunk automatically.
 - **Success State:** Upon completion, the system returns a summary of "X Documents Processed, Y Flashcards Created."
 
 ### 2.2 Hierarchical Knowledge Management
