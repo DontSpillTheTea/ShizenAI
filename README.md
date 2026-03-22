@@ -31,7 +31,7 @@ Ollama does not bundle the language models by default. You must pull the models 
 ```
 **Mac/Linux:**
 ```bash
-docker compose exec ollama ollama pull llama3
+docker compose exec ollama ollama pull qwen2.5:1.5b-instruct
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
@@ -74,7 +74,7 @@ The architecture is containerized and currently split into four primary services
    - Provides views for Data Ingestion, an active Records Dashboard, and Semantic Search. Communicates strictly with the local backend over port 8000.
 2. **Backend (`shizenai-backend`)**
    - Python FastAPI server handling the core business logic.
-   - Converts raw ingested text into concise summaries using the `llama3` model, then converts the summary into a 768-dimensional vector embedding via the `nomic-embed-text` model.
+   - Converts raw ingested text into concise summaries using the `qwen2.5:1.5b-instruct` model, then converts the summary into a 768-dimensional vector embedding via the `nomic-embed-text` model.
    - Exposes RESTful wrappers to search and insert records.
 3. **Database (`shizenai-postgres`)**
    - A PostgreSQL 15 database utilizing the `pgvector` extension.

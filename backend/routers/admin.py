@@ -3,6 +3,7 @@ import docx
 from fastapi import APIRouter, Depends, UploadFile, Form
 from sqlalchemy.orm import Session
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import uuid
 
 import models, database, auth, services
 
@@ -77,27 +78,30 @@ def get_users(db: Session = Depends(database.get_db), admin: models.User = Depen
 
 @router.post("/assign")
 def assign_topic(topic_id: str, target_user_id: str, db: Session = Depends(database.get_db), admin: models.User = Depends(auth.get_current_admin)):
+    topic_uuid = uuid.UUID(topic_id)
+    user_uuid = uuid.UUID(target_user_id)
+
     # 1. Create or Overwrite Assignment
-    assignment = db.query(models.UserAssignment).filter_by(user_id=target_user_id, topic_id=topic_id).first()
+    assignment = db.query(models.UserAssignment).filter_by(user_id=user_uuid, topic_id=topic_uuid).first()
     if not assignment:
-        assignment = models.UserAssignment(user_id=target_user_id, topic_id=topic_id)
+        assignment = models.UserAssignment(user_id=user_uuid, topic_id=topic_uuid)
         db.add(assignment)
         
     # 2. Init Progress Cache
-    cache = db.query(models.ProgressCache).filter_by(user_id=target_user_id, topic_id=topic_id).first()
+    cache = db.query(models.ProgressCache).filter_by(user_id=user_uuid, topic_id=topic_uuid).first()
     if not cache:
-        cache = models.ProgressCache(user_id=target_user_id, topic_id=topic_id, status="red")
+        cache = models.ProgressCache(user_id=user_uuid, topic_id=topic_uuid, status="red")
         db.add(cache)
     else:
         cache.status = "red"
 
     # 3. Seed SRS rows
-    flashcards = db.query(models.Flashcard).join(models.KnowledgeChunk).filter(models.KnowledgeChunk.topic_id == topic_id).all()
+    flashcards = db.query(models.Flashcard).join(models.KnowledgeChunk).filter(models.KnowledgeChunk.topic_id == topic_uuid).all()
     assigned = 0
     for fc in flashcards:
-        existing = db.query(models.UserReview).filter_by(user_id=target_user_id, flashcard_id=fc.id).first()
+        existing = db.query(models.UserReview).filter_by(user_id=user_uuid, flashcard_id=fc.id).first()
         if not existing:
-            review = models.UserReview(user_id=target_user_id, flashcard_id=fc.id)
+            review = models.UserReview(user_id=user_uuid, flashcard_id=fc.id)
             db.add(review)
             assigned += 1
     db.commit()

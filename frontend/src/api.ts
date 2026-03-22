@@ -100,3 +100,12 @@ export async function submitEvaluation(flashcardId: string, answer: string) {
   if (!res.ok) throw new Error('Evaluation failed');
   return res.json();
 }
+
+export async function getTopicCards(topicId: string) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}/api/v1/employee/topic/${topicId}/cards`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error('Failed to fetch topic cards');
+  return res.json();
+}

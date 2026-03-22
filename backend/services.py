@@ -20,9 +20,9 @@ def get_client() -> OpenAI:
     else:
         return OpenAI(api_key=OPENAI_API_KEY)
 
-def llama_generate(sys_prompt: str, user_prompt: str) -> str:
+def local_llm_generate(sys_prompt: str, user_prompt: str) -> str:
     client = get_client()
-    model = "llama3" if AI_PROVIDER == "local" else "gpt-4o-mini"
+    model = "qwen2.5:1.5b-instruct" if AI_PROVIDER == "local" else "gpt-4o-mini"
     
     response = client.chat.completions.create(
         model=model,
@@ -37,7 +37,7 @@ def llama_generate(sys_prompt: str, user_prompt: str) -> str:
 
 def generate_summary(text: str) -> str:
     sys = "You are a concise summarizer. Provide a brief, one-paragraph summary of the user's text."
-    return llama_generate(sys, text)
+    return local_llm_generate(sys, text)
 
 def generate_embedding(text: str) -> list[float]:
     client = get_client()
@@ -53,7 +53,7 @@ def generate_embedding(text: str) -> list[float]:
 
 def mock_external_search(query: str) -> str:
     client = get_client()
-    model = "llama3" if AI_PROVIDER == "local" else "gpt-4o-mini"
+    model = "qwen2.5:1.5b-instruct" if AI_PROVIDER == "local" else "gpt-4o-mini"
     
     response = client.chat.completions.create(
         model=model,

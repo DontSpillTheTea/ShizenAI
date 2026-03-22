@@ -36,7 +36,8 @@ def get_daily_queue(db: Session = Depends(database.get_db), current_user: models
     for rv in reviews:
         queue.append({
             "flashcard_id": str(rv.flashcard_id),
-            "question": rv.flashcard.generated_question
+            "question": rv.flashcard.generated_question,
+            "_debug_answer": rv.flashcard.chunk.raw_text
         })
     return {"queue": queue}
 
@@ -48,9 +49,14 @@ def evaluate_answer(req: EvaluationRequest, db: Session = Depends(database.get_d
         
     chunk = review.flashcard.chunk
     
-    # Strict LLM Judge Prompt
-    sys_prompt = "You are a strict technical evaluator. You must output ONLY RAW JSON format."
-    user_prompt = f"""Compare the Employee's Answer to the Ground Truth text.
+    # Cosine / L2 Distance Confidence Gate
+    answer_embedding = services.generate_embedding(req.user_answer)
+    distance = db.query(models.KnowledgeChunk.embedding.l2_distance(answer_embedding)).filter(models.KnowledgeChunk.id == chunk.id).scalar()
+    
+    if distance < 0.75:
+        # Local LLM Judge for High-Confidence matches
+        sys_prompt = "You are a strict technical evaluator. You must output ONLY RAW JSON format."
+        user_prompt = f"""Compare the Employee's Answer to the Ground Truth text.
 Does the answer correctly address the core concept of the Question based ONLY on the Ground Truth?
 
 Ground Truth: {chunk.raw_text}
@@ -64,17 +70,23 @@ You must respond ONLY with a strict JSON format exactly like this, nothing else:
 }}
 (Use score 1 for Pass, 0 for Fail)"""
 
-    try:
-        judge_raw = services.llama_generate(sys_prompt, user_prompt)
-        start_idx = judge_raw.find("{")
-        end_idx = judge_raw.rfind("}") + 1
-        judge_json = json.loads(judge_raw[start_idx:end_idx])
-        score = int(judge_json.get("score", 0))
-        explanation = judge_json.get("explanation", "No explanation provided.")
-    except Exception as e:
-        print("LLM Judge fallback:", str(e))
+        try:
+            judge_raw = services.local_llm_generate(sys_prompt, user_prompt)
+            start_idx = judge_raw.find("{")
+            end_idx = judge_raw.rfind("}") + 1
+            judge_json = json.loads(judge_raw[start_idx:end_idx])
+            score = int(judge_json.get("score", 0))
+            explanation = judge_json.get("explanation", "No explanation provided.")
+        except Exception as e:
+            print("LLM Judge fallback:", str(e))
+            score = 0
+            explanation = "Error parsing LLM evaluation. Defaulting to fail."
+    else:
+        # Off-topic / Weak Match -> Bounced to External API LLM
         score = 0
-        explanation = "Error parsing LLM evaluation. Defaulting to fail."
+        prompt = f"The user tried to answer the question '{review.flashcard.generated_question}' with '{req.user_answer}'. Briefly explain the correct concept."
+        external_context = services.mock_external_search(prompt)
+        explanation = f"[External API LLM Call] Answer was structurally off-topic (Distance: {distance:.2f}). Web Context: {external_context}"
 
     # Progress Cache Tracking
     topic_id = chunk.topic_id
@@ -114,3 +126,8 @@ You must respond ONLY with a strict JSON format exactly like this, nothing else:
         "explanation": explanation,
         "next_review_in_days": review.interval_days
     }
+
+@router.get("/topic/{topic_id}/cards")
+def get_topic_cards(topic_id: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    flashcards = db.query(models.Flashcard).join(models.KnowledgeChunk).filter(models.KnowledgeChunk.topic_id == topic_id).all()
+    return [{"id": str(fc.id), "question": fc.generated_question} for fc in flashcards]
