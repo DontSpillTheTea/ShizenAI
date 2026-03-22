@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { uploadDocument, getUsers, assignTopic, getAdminHierarchy } from './api';
+import { uploadDocument, getUsers, assignTopic, getAdminHierarchy, createEmployee } from './api';
 import { TopicTree, TopicNode, buildTree } from './components/TopicTree';
+import { Sprout } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [file, setFile] = useState<File | null>(null);
@@ -12,6 +13,7 @@ export default function AdminDashboard() {
   
   const [treeData, setTreeData] = useState<TopicNode[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
+  const [newUserName, setNewUserName] = useState('');
 
   // Load Users
   useEffect(() => {
@@ -36,6 +38,22 @@ export default function AdminDashboard() {
        loadTree('');
     }
   }, [selectedUserId]);
+
+  const handleCreateUser = async (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && newUserName.trim()) {
+      try {
+        setStatus('Creating new employee profile...');
+        const u = await createEmployee(newUserName.trim());
+        setUsers(prev => {
+            if (prev.find(x => x.id === u.id)) return prev;
+            return [...prev, u];
+        });
+        setSelectedUserId(u.id);
+        setNewUserName('');
+        setStatus('Employee joined active directory.');
+      } catch (err: any) { setStatus(err.message); }
+    }
+  };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +100,10 @@ export default function AdminDashboard() {
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8 mt-8">
       <div>
-        <h2 className="text-3xl font-bold text-emerald-400">Employer Dashboard</h2>
+        <h2 className="text-3xl font-bold text-emerald-400 flex items-center gap-3">
+          <Sprout className="w-8 h-8" />
+          Voice Training Assistant Admin
+        </h2>
         <p className="text-gray-400 mt-2">One-Click Ingestion & Automated Competency Tracking</p>
       </div>
 
@@ -111,6 +132,17 @@ export default function AdminDashboard() {
         {/* RIGHT COLUMN: Assignment Matrix & Tree */}
         <div className="bg-white/5 border border-white/10 p-6 rounded-2xl space-y-4 flex flex-col">
           <h3 className="text-xl font-bold text-white mb-4">2. Assignment Matrix</h3>
+
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Create new employee... (Press Enter)" 
+              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:outline-blue-500"
+              value={newUserName}
+              onChange={e => setNewUserName(e.target.value)}
+              onKeyDown={handleCreateUser}
+            />
+          </div>
           
           <select 
             className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:outline-blue-500"

@@ -8,6 +8,7 @@ load_dotenv()
 AI_PROVIDER = os.getenv("AI_PROVIDER", "local")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434/v1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy-key-for-local")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 
 # Nomic-embed-text generates 768-dimensional embeddings by default. 
 # text-embedding-3-small generates 1536.
@@ -51,20 +52,23 @@ def generate_embedding(text: str) -> list[float]:
     
     return embedding
 
-def mock_external_search(query: str) -> str:
-    client = get_client()
-    model = "qwen2.5:1.5b-instruct" if AI_PROVIDER == "local" else "gpt-4o-mini"
+def external_perplexity_chat(system_prompt: str, messages: list[dict], model_name: str = "sonar") -> str:
+    if not PERPLEXITY_API_KEY:
+        return '{"is_correct": false, "has_question": false, "response": "Perplexity API Key missing."}'
     
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a Research Assistant with access to the wider internet. Answer the user's query comprehensively based on general knowledge."},
-            {"role": "user", "content": query}
-        ],
-        max_tokens=256,
-        temperature=0.7
-    )
-    return response.choices[0].message.content.strip()
+    pplx_client = OpenAI(base_url="https://api.perplexity.ai", api_key=PERPLEXITY_API_KEY)
+    
+    payload_messages = [{"role": "system", "content": system_prompt}] + messages
+    try:
+        response = pplx_client.chat.completions.create(
+            model=model_name,
+            messages=payload_messages,
+            max_tokens=600,
+            temperature=0.2
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f'{{\n"is_correct": false,\n"has_question": false,\n"response": "Perplexity API Error: {str(e)}"\n}}'
 
 def mock_audio_synthesis(text: str) -> str:
     # Simulate API latency realistically requested for Mock ElevenLabs

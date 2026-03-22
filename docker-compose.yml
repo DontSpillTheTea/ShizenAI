@@ -28,6 +28,9 @@ services:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/shizenai
       - AI_PROVIDER=local
       - OLLAMA_BASE_URL=http://ollama:11434/v1
+    env_file:
+      - perplexity_key.env
+      - elevenlabs_key.env
     depends_on:
       - postgres
       - ollama

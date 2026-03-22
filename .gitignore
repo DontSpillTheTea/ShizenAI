@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+perplexity_key.env
+elevenlabs_key.env
 
 # --- Node / Frontend (React/Vite) ---
 node_modules/

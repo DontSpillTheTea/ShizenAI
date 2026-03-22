@@ -83,11 +83,22 @@ export async function getEmployeeHierarchy() {
   const res = await fetch(`${API_URL}/api/v1/employee/hierarchy/topics`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error('Queue failed');
+  if (!res.ok) throw new Error('Failed to fetch employee hierarchy');
   return res.json();
 }
 
-export async function submitEvaluation(flashcardId: string, answer: string) {
+export async function getTTSAudioBlob(text: string) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}/api/v1/employee/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ text })
+  });
+  if (!res.ok) throw new Error('TTS failed');
+  return res.blob();
+}
+
+export async function submitEvaluation(flashcardId: string, messages: any[]) {
   const token = localStorage.getItem('token');
   const res = await fetch(`${API_URL}/api/v1/employee/evaluate`, {
     method: 'POST',
@@ -95,7 +106,7 @@ export async function submitEvaluation(flashcardId: string, answer: string) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}` 
     },
-    body: JSON.stringify({ flashcard_id: flashcardId, user_answer: answer })
+    body: JSON.stringify({ flashcard_id: flashcardId, messages })
   });
   if (!res.ok) throw new Error('Evaluation failed');
   return res.json();
@@ -110,10 +121,26 @@ export async function getTopicCards(topicId: string) {
   return res.json();
 }
 
-export async function skipCard(flashcardId: string) {
+export async function markCardWrong(flashcardId: string) {
   const token = localStorage.getItem('token');
-  await fetch(`${API_URL}/api/v1/employee/skip/${flashcardId}`, {
+  const res = await fetch(`${API_URL}/api/v1/employee/mark_wrong/${flashcardId}`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` }
   });
+  if (!res.ok) throw new Error('Failed to mark wrong');
+  return res.json();
+}
+
+export async function createEmployee(name: string) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_URL}/api/v1/admin/users`, {
+    method: 'POST',
+    headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json' 
+    },
+    body: JSON.stringify({ name })
+  });
+  if (!res.ok) throw new Error('Failed to create new user');
+  return res.json();
 }

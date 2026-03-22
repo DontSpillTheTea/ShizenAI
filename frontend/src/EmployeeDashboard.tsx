@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getQueue, submitEvaluation, getEmployeeHierarchy } from './api';
+import { getQueue, submitEvaluation, getEmployeeHierarchy, markCardWrong, getTTSAudioBlob } from './api';
 import { TopicTree, TopicNode, buildTree } from './components/TopicTree';
+import { Sprout } from 'lucide-react';
 
 export default function EmployeeDashboard() {
   const [queue, setQueue] = useState<any[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answer, setAnswer] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const [cardState, setCardState] = useState<'initial'|'passed_chatting'|'failed_chatting'>('initial');
   const [status, setStatus] = useState('Fetching Daily Review Sync...');
   
   const [treeData, setTreeData] = useState<TopicNode[]>([]);
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const [autoSubmitTrigger, setAutoSubmitTrigger] = useState(0);
 
   const loadTree = async () => {
     try {
@@ -75,6 +78,7 @@ export default function EmployeeDashboard() {
         e.preventDefault();
         try { recognitionRef.current?.stop(); } catch(err) {}
         setIsListening(false);
+        setTimeout(() => setAutoSubmitTrigger(Date.now()), 600);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -85,30 +89,59 @@ export default function EmployeeDashboard() {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (isListening) toggleListen();
     if (!answer.trim() || currentIdx >= queue.length) return;
     
-    setStatus('Passing submission to Local LLM Judge...');
+    setStatus('Evaluating conversation...');
+    const newChat = [...chatHistory, { role: 'user', content: answer }];
+    setChatHistory(newChat);
+    setAnswer('');
+    
     try {
-      const res = await submitEvaluation(queue[currentIdx].flashcard_id, answer);
-      setResult(res);
+      const res = await submitEvaluation(queue[currentIdx].flashcard_id, newChat);
+      if (res.status === 'passed_auto') {
+        handleNext();
+      } else if (res.status === 'passed_chatting') {
+        setCardState('passed_chatting');
+        setChatHistory([...newChat, { role: 'assistant', content: res.explanation }]);
+        playAudio(res.explanation);
+        loadTree();
+      } else {
+        setCardState('failed_chatting');
+        setChatHistory([...newChat, { role: 'assistant', content: res.explanation }]);
+        playAudio(res.explanation);
+      }
       setStatus('');
-      // Live reload the Mastery Tree to visualize competency shifts
-      loadTree();
     } catch(err) { setStatus('Evaluation backend failed'); }
   };
 
-  const handleSkip = () => {
+  const playAudio = async (text: string) => {
+    try {
+      const blob = await getTTSAudioBlob(text);
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.play();
+    } catch(e) { console.error('Audio synthesis failed', e); }
+  };
+
+  useEffect(() => {
+    if (autoSubmitTrigger > 0) {
+      handleSubmit();
+    }
+  }, [autoSubmitTrigger]);
+
+  const handleMarkWrongAndNext = async () => {
     if (isListening) toggleListen();
-    // Skips evaluation for this traversal loop. The database is untouched, so SRS mathematically 
-    // forces it to reappear in the queue upon the next `loadQueue()` refresh.
+    try {
+      await markCardWrong(queue[currentIdx].flashcard_id);
+    } catch (e) { console.error(e) }
     handleNext();
   };
 
   const handleNext = () => {
-    setResult(null);
+    setCardState('initial');
+    setChatHistory([]);
     setAnswer('');
     if (currentIdx + 1 < queue.length) { setCurrentIdx(c => c + 1); } 
     else { loadQueue(); setCurrentIdx(0); }
@@ -118,7 +151,10 @@ export default function EmployeeDashboard() {
     <div className="max-w-6xl mx-auto p-6 mt-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-           <h2 className="text-3xl font-bold text-blue-400">Employee Workspace</h2>
+           <h2 className="text-3xl font-bold text-blue-400 flex items-center gap-3">
+             <Sprout className="w-8 h-8" />
+             Voice Training Assistant Workspace
+           </h2>
            <p className="text-gray-400 mt-2">Voice-verified competence building & real-time mastery tracking.</p>
         </div>
         <span className="px-5 py-2 rounded-full bg-blue-900/40 text-blue-300 font-mono text-sm border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
@@ -142,53 +178,64 @@ export default function EmployeeDashboard() {
         <div className="col-span-2">
            {status && <div className="p-4 bg-slate-900 rounded-lg text-emerald-400 mb-6 font-mono border border-emerald-900/50">{status}</div>}
 
-           {queue.length > 0 && currentIdx < queue.length && !result && (
+           {queue.length > 0 && currentIdx < queue.length && (
              <div className="bg-slate-900/80 border border-slate-700/80 p-8 rounded-3xl shadow-2xl shadow-black/80 space-y-6">
                <p className="text-sm text-gray-400 font-mono uppercase tracking-widest border-b border-white/5 pb-2">Active Assessment {currentIdx + 1} / {queue.length}</p>
-               <div className="text-2xl text-white font-medium italic leading-relaxed py-4">
-                 "{queue[currentIdx].question}"
-               </div>
                
-               <form onSubmit={handleSubmit} className="space-y-4">
+               {cardState === 'initial' && (
+                 <div className="text-2xl text-white font-medium italic leading-relaxed py-4">
+                   "{queue[currentIdx].question}"
+                 </div>
+               )}
+
+               {chatHistory.length > 0 && (
+                 <div className="space-y-4 max-h-96 overflow-y-auto mb-4 custom-scrollbar">
+                    {chatHistory.map((msg: any, i: number) => (
+                      <div key={i} className={`p-4 rounded-xl ${msg.role === 'user' ? 'bg-blue-900/40 text-blue-100 ml-12' : 'bg-slate-800/80 text-emerald-100 mr-12'}`}>
+                        <span className="font-bold text-[10px] uppercase tracking-widest opacity-50 block mb-1">{msg.role}</span>
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                      </div>
+                    ))}
+                 </div>
+               )}
+               
+               <form onSubmit={handleSubmit} className="space-y-4 flex flex-col">
                  <div className="relative">
                    <textarea
                      value={answer}
-                     onChange={e => setAnswer(e.target.value)}
-                     className="w-full h-40 bg-black/80 border border-slate-700 rounded-2xl p-5 text-white focus:border-blue-500 outline-none text-lg resize-none shadow-inner"
-                     placeholder="Demonstrate your knowledge via text or voice..."
+                     onChange={(e: any) => setAnswer(e.target.value)}
+                     className="w-full h-32 bg-black/80 border border-slate-700 rounded-2xl p-5 text-white focus:border-blue-500 outline-none text-lg resize-none shadow-inner"
+                     placeholder={cardState === 'initial' ? "Demonstrate your knowledge via text or voice..." : "Ask a follow-up question..."}
                    />
                    <button type="button" onClick={toggleListen} className={`absolute bottom-4 right-4 p-4 rounded-full transition-all flex items-center justify-center ${isListening ? 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.7)] animate-pulse' : 'bg-slate-800 hover:bg-slate-700'}`} title="Hold to Dictate">
                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                    </button>
                  </div>
+                 
                  <div className="flex gap-4">
-                   <button type="submit" className="flex-1 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black tracking-widest uppercase rounded-2xl transition-colors shadow-lg">Submit For Evaluation</button>
-                   <button type="button" onClick={() => setAnswer(queue[currentIdx]._debug_answer)} className="px-8 py-5 bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 font-black tracking-widest uppercase rounded-2xl transition-colors border border-purple-900/50 shadow-lg flex items-center justify-center cursor-pointer" title="Debug: Auto-fill Correct Answer">
-                     <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                   <button type="submit" className="flex-1 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black tracking-widest uppercase rounded-2xl transition-colors shadow-lg">
+                     {cardState === 'initial' ? 'Submit' : 'Respond'}
                    </button>
-                   <button type="button" onClick={handleSkip} className="px-8 py-5 bg-red-900/40 hover:bg-red-800/60 text-red-200 font-black tracking-widest uppercase rounded-2xl transition-colors border border-red-900/50 shadow-lg flex items-center justify-center cursor-pointer" title="Skip / Mark Incorrect">
-                     <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                   </button>
+                   
+                   {cardState === 'initial' && (
+                       <button type="button" onClick={() => setAnswer(queue[currentIdx]._debug_answer)} className="px-8 py-5 bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 font-black tracking-widest uppercase rounded-2xl border border-purple-900/50 shadow-lg flex items-center justify-center cursor-pointer" title="Debug: Auto-fill">
+                         <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                       </button>
+                   )}
+
+                   {cardState === 'passed_chatting' && (
+                       <button type="button" onClick={handleNext} className="flex-1 py-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black tracking-widest uppercase rounded-2xl shadow-lg">
+                         All Understood -&gt; Proceed
+                       </button>
+                   )}
+
+                   {(cardState === 'initial' || cardState === 'failed_chatting') && (
+                     <button type="button" onClick={handleMarkWrongAndNext} className="px-8 py-5 bg-red-900/40 hover:bg-red-800/60 text-red-200 font-black tracking-widest uppercase rounded-2xl border border-red-900/50 shadow-lg flex items-center justify-center cursor-pointer" title="Mark Incorrect & Next">
+                       {cardState === 'failed_chatting' ? 'Mark Wrong & Next' : <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>}
+                     </button>
+                   )}
                  </div>
                </form>
-             </div>
-           )}
-
-           {result && (
-             <div className={`p-8 rounded-3xl border ${result.score >= 1 ? 'bg-emerald-900/20 border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.15)]' : 'bg-red-900/20 border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.15)]'} space-y-6`}>
-               <div className="flex flex-col gap-4">
-                 <div className={`self-start px-6 py-2 text-sm font-black tracking-widest uppercase rounded-full ${result.score >= 1 ? 'bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'}`}>
-                   Judge Verdict: {result.score >= 1 ? 'Competence Verified' : 'Critical Failure'}
-                 </div>
-                 <p className="text-slate-200 text-xl leading-relaxed font-medium whitespace-pre-wrap">{result.explanation}</p>
-               </div>
-               
-               <div className="pt-6 border-t border-white/10 flex items-center justify-between">
-                 <p className="text-sm text-gray-400 flex items-center gap-2 font-mono">
-                   Memory Decay (SRS Next Review): <span className="text-white bg-white/10 px-3 py-1 rounded-md">{result.next_review_in_days} days</span>
-                 </p>
-                 <button onClick={handleNext} className="px-10 py-4 bg-slate-100 hover:bg-white text-black font-black uppercase tracking-widest rounded-xl transition-colors shadow-lg">Proceed</button>
-               </div>
              </div>
            )}
         </div>

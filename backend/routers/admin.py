@@ -71,6 +71,23 @@ async def upload_document(
     db.commit()
     return {"message": f"Successfully ingested {len(chunks)} chunks and synthesized {created_flashcards} flashcards into topic '{topic_title}'", "topic_id": topic.id}
 
+from pydantic import BaseModel
+
+class UserCreate(BaseModel):
+    name: str
+
+@router.post("/users")
+def create_employee(req: UserCreate, db: Session = Depends(database.get_db), admin: models.User = Depends(auth.get_current_admin)):
+    existing = db.query(models.User).filter_by(name=req.name).first()
+    if existing:
+        return {"id": str(existing.id), "name": existing.name}
+    hashed_pw = auth.pwd_context.hash("password")
+    new_user = models.User(name=req.name, role="employee", hashed_password=hashed_pw)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"id": str(new_user.id), "name": new_user.name}
+
 @router.get("/users")
 def get_users(db: Session = Depends(database.get_db), admin: models.User = Depends(auth.get_current_admin)):
     users = db.query(models.User).filter(models.User.role == "employee").all()

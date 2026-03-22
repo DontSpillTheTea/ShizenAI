@@ -14,3 +14,4 @@ python-multipart
 langchain-text-splitters
 PyMuPDF
 python-docx
+requests
