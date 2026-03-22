@@ -61,7 +61,7 @@ async def upload_document(
         db.flush() # get db_chunk.id
         
         # Auto-gen via atomic pipeline
-        prompt = f"Based on this text, generate ONE single specific probing open-ended question that tests the core concept. Output ONLY the question text:\n\n{chunk_text}"
+        prompt = f"Based on this exact text, generate ONE highly specific flashcard question where the correct answer is literally the exact definition or core sentence from the text. Make it unambiguous. Output ONLY the question text:\n\n{chunk_text}"
         question = services.generate_summary(prompt)
         
         fc = models.Flashcard(chunk_id=db_chunk.id, generated_question=question.strip())
@@ -97,12 +97,18 @@ def assign_topic(topic_id: str, target_user_id: str, db: Session = Depends(datab
 
     # 3. Seed SRS rows
     flashcards = db.query(models.Flashcard).join(models.KnowledgeChunk).filter(models.KnowledgeChunk.topic_id == topic_uuid).all()
+    from sqlalchemy.sql import func
     assigned = 0
     for fc in flashcards:
         existing = db.query(models.UserReview).filter_by(user_id=user_uuid, flashcard_id=fc.id).first()
         if not existing:
             review = models.UserReview(user_id=user_uuid, flashcard_id=fc.id)
             db.add(review)
+            assigned += 1
+        else:
+            existing.next_review_at = func.now()
+            existing.interval_days = 0
+            existing.consecutive_passes = 0
             assigned += 1
     db.commit()
     return {"message": f"Assigned {assigned} flashcards to user and tracked in matrix"}

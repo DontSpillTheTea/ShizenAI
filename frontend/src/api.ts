@@ -109,3 +109,11 @@ export async function getTopicCards(topicId: string) {
   if (!res.ok) throw new Error('Failed to fetch topic cards');
   return res.json();
 }
+
+export async function skipCard(flashcardId: string) {
+  const token = localStorage.getItem('token');
+  await fetch(`${API_URL}/api/v1/employee/skip/${flashcardId}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+}

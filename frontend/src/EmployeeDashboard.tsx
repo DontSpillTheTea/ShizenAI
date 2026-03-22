@@ -102,6 +102,8 @@ export default function EmployeeDashboard() {
 
   const handleSkip = () => {
     if (isListening) toggleListen();
+    // Skips evaluation for this traversal loop. The database is untouched, so SRS mathematically 
+    // forces it to reappear in the queue upon the next `loadQueue()` refresh.
     handleNext();
   };
 
@@ -120,7 +122,7 @@ export default function EmployeeDashboard() {
            <p className="text-gray-400 mt-2">Voice-verified competence building & real-time mastery tracking.</p>
         </div>
         <span className="px-5 py-2 rounded-full bg-blue-900/40 text-blue-300 font-mono text-sm border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]">
-          Queue Due Today: {queue.length}
+          Queue Due Today: {queue.length > 0 ? queue.length - currentIdx : 0}
         </span>
       </div>
 
@@ -178,7 +180,7 @@ export default function EmployeeDashboard() {
                  <div className={`self-start px-6 py-2 text-sm font-black tracking-widest uppercase rounded-full ${result.score >= 1 ? 'bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'}`}>
                    Judge Verdict: {result.score >= 1 ? 'Competence Verified' : 'Critical Failure'}
                  </div>
-                 <p className="text-slate-200 text-xl leading-relaxed font-medium">{result.explanation}</p>
+                 <p className="text-slate-200 text-xl leading-relaxed font-medium whitespace-pre-wrap">{result.explanation}</p>
                </div>
                
                <div className="pt-6 border-t border-white/10 flex items-center justify-between">
