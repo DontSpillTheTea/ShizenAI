@@ -44,9 +44,9 @@ def text_to_speech(req: TTSRequest):
     import re
     clean_text = re.sub(r'[*_#`>]', '', req.text)
 
-    ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+    ELEVENLABS_API_KEY = (os.getenv("ELEVENLABS_API_KEY") or "").strip()
     if not ELEVENLABS_API_KEY:
-        raise HTTPException(status_code=500, detail="Missing ElevenLabs API Key")
+        raise HTTPException(status_code=503, detail="Missing ElevenLabs API Key")
         
     voice_id = "cjVigY5qzO86Huf0OWal" # Default clear male voice
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
@@ -63,9 +63,19 @@ def text_to_speech(req: TTSRequest):
         "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}
     }
     
-    resp = requests.post(url, json=payload, headers=headers, stream=True)
+    try:
+        resp = requests.post(url, json=payload, headers=headers, stream=True, timeout=15)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"ElevenLabs request failed: {exc}")
     if not resp.ok:
-        raise HTTPException(status_code=resp.status_code, detail="ElevenLabs API error")
+        detail = "ElevenLabs API error"
+        try:
+            data = resp.json()
+            if isinstance(data, dict):
+                detail = data.get("detail", {}).get("message") or data.get("message") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=detail)
         
     def generate():
         for chunk in resp.iter_content(chunk_size=4096):
@@ -128,6 +138,11 @@ Output ONLY the raw JSON string."""
                 clean_json = raw_resp
                 if "```json" in raw_resp: clean_json = raw_resp.split("```json")[1].split("```")[0]
                 elif "```" in raw_resp: clean_json = raw_resp.split("```")[1].split("```")[0]
+                else:
+                    import re
+                    match = re.search(r"\{[\s\S]*\}", raw_resp)
+                    if match:
+                        clean_json = match.group(0)
                 
                 parsed = json.loads(clean_json.strip())
                 score = 1 if parsed.get("is_correct") else 0
@@ -135,8 +150,9 @@ Output ONLY the raw JSON string."""
                 tutor_reply = parsed.get("response", "No response provided.")
             except Exception as e:
                 score = 0
-                has_question = False
-                tutor_reply = f"Let's try that again. (Evaluation Error)"
+                has_question = "?" in user_text
+                fallback = (raw_resp or "").strip()
+                tutor_reply = fallback if fallback else "Let's try that again."
 
         if score == 1:
             topic_id = chunk.topic_id

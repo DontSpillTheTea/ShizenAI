@@ -18,9 +18,30 @@ export default function EmployeeDashboard() {
 
   const [isListening, setIsListening] = useState(false);
   const [micNotice, setMicNotice] = useState('');
-  const [micReady, setMicReady] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const micReadyRef = useRef(false);
+  const answerRef = useRef<HTMLTextAreaElement | null>(null);
+  const pttActiveRef = useRef(false);
+  const pttTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [autoSubmitTrigger, setAutoSubmitTrigger] = useState(0);
+
+  const doStartListening = () => {
+    if (!micReadyRef.current || !recognitionRef.current) return false;
+    try {
+      recognitionRef.current.start();
+      setMicNotice('');
+      setIsListening(true);
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  };
+
+  const doStopListening = () => {
+    try { recognitionRef.current?.stop(); } catch (e) { }
+    setIsListening(false);
+  };
 
   const loadTree = async () => {
     try {
@@ -71,67 +92,86 @@ export default function EmployeeDashboard() {
         setIsListening(false);
       };
       recognitionRef.current = rec;
-      setMicReady(true);
+      micReadyRef.current = true;
     } else {
       setMicNotice('Speech recognition is not supported in this browser.');
     }
   }, []);
 
   const toggleListen = async () => {
-    if (!micReady || !recognitionRef.current) {
+    if (!micReadyRef.current || !recognitionRef.current) {
       if (!micNotice) setMicNotice('Microphone is unavailable in this browser/context.');
       return;
     }
 
     if (isListening) {
-      try { recognitionRef.current?.stop(); } catch (e) { }
-      setIsListening(false);
+      doStopListening();
     } else {
       try {
-        // Trigger permission prompt for browsers that gate speech APIs behind mic permission.
         if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           stream.getTracks().forEach((t) => t.stop());
         }
-        recognitionRef.current?.start();
-        setMicNotice('');
-      } catch (e: any) {
+      } catch (e) {
         console.error(e);
         setMicNotice('Microphone permission blocked. Allow mic access and retry.');
         return;
       }
-      setIsListening(true);
+      doStartListening();
     }
   };
 
   useEffect(() => {
+    const PTT_HOLD_MS = 300;
+
+    const activatePTT = () => {
+      setAnswer((prev) => prev.endsWith(' ') ? prev.slice(0, -1) : prev);
+      if (doStartListening()) {
+        pttActiveRef.current = true;
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-        e.preventDefault();
-        if (!micReady || !recognitionRef.current) return;
-        try { recognitionRef.current?.start(); } catch (err) { }
-        setIsListening(true);
+      if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (pttActiveRef.current) { e.preventDefault(); return; }
+
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName ?? '';
+
+      if (tag === 'INPUT' || tag === 'SELECT' || el?.isContentEditable) return;
+
+      if (tag === 'TEXTAREA') {
+        if (pttTimerRef.current) clearTimeout(pttTimerRef.current);
+        pttTimerRef.current = setTimeout(() => activatePTT(), PTT_HOLD_MS);
+        return;
       }
+
+      e.preventDefault();
+      activatePTT();
     };
+
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-        e.preventDefault();
-        try { recognitionRef.current?.stop(); } catch (err) { }
-        setIsListening(false);
-        setTimeout(() => setAutoSubmitTrigger(Date.now()), 600);
-      }
+      if (e.code !== 'Space') return;
+      if (pttTimerRef.current) { clearTimeout(pttTimerRef.current); pttTimerRef.current = null; }
+      if (!pttActiveRef.current) return;
+      e.preventDefault();
+      doStopListening();
+      pttActiveRef.current = false;
+      setTimeout(() => setAutoSubmitTrigger(Date.now()), 600);
     };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      if (pttTimerRef.current) clearTimeout(pttTimerRef.current);
     };
   }, []);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (isListening) toggleListen();
+    if (isListening) doStopListening();
     if (!answer.trim() || currentIdx >= queue.length) return;
 
     setStatus('Evaluating your response...');
@@ -158,11 +198,28 @@ export default function EmployeeDashboard() {
   };
 
   const playAudio = async (text: string) => {
+    const useBrowserFallback = (label: string) => {
+      console.warn('ElevenLabs TTS unavailable, using browser speech:', label);
+      const synth = window.speechSynthesis;
+      if (synth) {
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        synth.speak(utter);
+      }
+    };
+
     try {
       const blob = await getTTSAudioBlob(text);
-      const audio = new Audio(URL.createObjectURL(blob));
-      audio.play();
-    } catch (e) { console.error('Audio synthesis failed', e); }
+      if (!blob || blob.size < 100) { useBrowserFallback('empty blob'); return; }
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onerror = () => { URL.revokeObjectURL(url); useBrowserFallback('audio decode error'); };
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play().catch(() => useBrowserFallback('autoplay blocked'));
+    } catch (e) {
+      console.error('TTS fetch failed', e);
+      useBrowserFallback(String(e));
+    }
   };
 
   useEffect(() => {
@@ -172,7 +229,7 @@ export default function EmployeeDashboard() {
   }, [autoSubmitTrigger]);
 
   const handleMarkWrongAndNext = async () => {
-    if (isListening) toggleListen();
+    if (isListening) doStopListening();
     try {
       await markCardWrong(queue[currentIdx].flashcard_id);
     } catch (e) { console.error(e); }
@@ -282,6 +339,7 @@ export default function EmployeeDashboard() {
                 )}
                 <div className="relative">
                   <textarea
+                    ref={answerRef}
                     value={answer}
                     onChange={(e: any) => setAnswer(e.target.value)}
                     className="w-full h-32 bg-black/80 border border-slate-700 rounded-2xl p-5 text-white focus:border-blue-500 outline-none text-lg resize-none shadow-inner"

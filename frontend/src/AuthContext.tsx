@@ -17,13 +17,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
+  const clearSession = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('name');
+    localStorage.removeItem('role');
+    setToken(null);
+    setUser(null);
+  };
+
   useEffect(() => {
     const storedRole = localStorage.getItem('role');
     const storedName = localStorage.getItem('name');
     if (token && storedRole && storedName) {
       setUser({ name: storedName, role: storedRole });
+    } else if (!token) {
+      setUser(null);
     }
   }, [token]);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('name');
+      localStorage.removeItem('role');
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener('shizen-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('shizen-auth-expired', handleAuthExpired);
+  }, []);
 
   const login = (newToken: string, name: string, role: string) => {
     localStorage.setItem('token', newToken);
@@ -34,11 +56,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('name');
-    localStorage.removeItem('role');
-    setToken(null);
-    setUser(null);
+    clearSession();
   };
 
   return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>;

@@ -7,8 +7,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
-
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
+def get_perplexity_api_key() -> str:
+    return (os.getenv("PERPLEXITY_API_KEY") or "").strip()
 
 def _hash_embedding_768(text: str) -> list[float]:
     """
@@ -39,7 +39,7 @@ def _hash_embedding_768(text: str) -> list[float]:
 def generate_summary(text: str) -> str:
     if not text:
         return ""
-    if not PERPLEXITY_API_KEY:
+    if not get_perplexity_api_key():
         # Graceful fallback if key is missing in a local/dev environment.
         return text[:600]
 
@@ -53,14 +53,34 @@ def generate_summary(text: str) -> str:
         model_name="sonar"
     )
 
+def generate_flashcard_question(chunk_text: str) -> str:
+    if not chunk_text:
+        return ""
+    if not get_perplexity_api_key():
+        sentences = [s.strip() for s in chunk_text.split('.') if s.strip()]
+        core = sentences[0] if sentences else chunk_text[:120]
+        return f"What does this mean: \"{core}\"?"
+
+    sys = (
+        "You are a flashcard question writer. Given source text, generate ONE highly specific "
+        "question whose answer is literally in the text. Output ONLY the question, no numbering, "
+        "no preamble, no markdown. Plain text question only."
+    )
+    return external_perplexity_chat(
+        system_prompt=sys,
+        messages=[{"role": "user", "content": chunk_text[:4000]}],
+        model_name="sonar"
+    )
+
 def generate_embedding(text: str) -> list[float]:
     return _hash_embedding_768(text)
 
 def external_perplexity_chat(system_prompt: str, messages: list[dict], model_name: str = "sonar") -> str:
-    if not PERPLEXITY_API_KEY:
+    api_key = get_perplexity_api_key()
+    if not api_key:
         return '{"is_correct": false, "has_question": false, "response": "Perplexity API Key missing."}'
     
-    pplx_client = OpenAI(base_url="https://api.perplexity.ai", api_key=PERPLEXITY_API_KEY)
+    pplx_client = OpenAI(base_url="https://api.perplexity.ai", api_key=api_key)
     
     payload_messages = [{"role": "system", "content": system_prompt}] + messages
     try:
@@ -87,7 +107,7 @@ def extract_topics_from_transcript(transcript_text: str) -> list[dict]:
     """
     FALLBACK = [{"title": "Imported Omi knowledge review", "description": "Informally captured knowledge pending manager review."}]
 
-    if not PERPLEXITY_API_KEY:
+    if not get_perplexity_api_key():
         return FALLBACK
 
     system_prompt = (

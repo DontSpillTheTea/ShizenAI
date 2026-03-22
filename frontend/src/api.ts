@@ -8,6 +8,34 @@ function getHeaders() {
   };
 }
 
+function clearAuthSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('name');
+  localStorage.removeItem('role');
+  window.dispatchEvent(new Event('shizen-auth-expired'));
+}
+
+async function ensureOk(res: Response, fallbackMessage: string) {
+  if (res.ok) return;
+
+  if (res.status === 401) {
+    clearAuthSession();
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  let message = fallbackMessage;
+  try {
+    const payload = await res.json();
+    if (payload?.detail) {
+      message = typeof payload.detail === 'string' ? payload.detail : fallbackMessage;
+    }
+  } catch {
+    // Keep fallback message when response is not JSON.
+  }
+
+  throw new Error(message);
+}
+
 export async function login(username: string, password: string) {
   const formData = new URLSearchParams();
   formData.append('username', username);
@@ -18,7 +46,7 @@ export async function login(username: string, password: string) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData
   });
-  if (!res.ok) throw new Error('Login failed');
+  await ensureOk(res, 'Login failed');
   return res.json();
 }
 
@@ -34,7 +62,7 @@ export async function uploadDocument(file: File, topicTitle: string, parentTopic
     headers: { 'Authorization': `Bearer ${token}` },
     body: formData
   });
-  if (!res.ok) throw new Error('Upload failed');
+  await ensureOk(res, 'Upload failed');
   return res.json();
 }
 
@@ -44,7 +72,7 @@ export async function getAdminHierarchy(userId?: string) {
   const res = await fetch(url, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error('Failed to fetch topics');
+  await ensureOk(res, 'Failed to fetch topics');
   return res.json();
 }
 
@@ -53,13 +81,13 @@ export async function generateFlashcards(topicId: string) {
     method: 'POST',
     headers: getHeaders()
   });
-  if (!res.ok) throw new Error('Generation failed');
+  await ensureOk(res, 'Generation failed');
   return res.json();
 }
 
 export async function getUsers() {
   const res = await fetch(`${API_URL}/api/v1/admin/users`, { headers: getHeaders() });
-  if (!res.ok) throw new Error('Fetch users failed');
+  await ensureOk(res, 'Fetch users failed');
   return res.json();
 }
 
@@ -68,13 +96,13 @@ export async function assignTopic(topicId: string, targetUserId: string) {
     method: 'POST',
     headers: getHeaders()
   });
-  if (!res.ok) throw new Error('Assignment failed');
+  await ensureOk(res, 'Assignment failed');
   return res.json();
 }
 
 export async function getQueue() {
   const res = await fetch(`${API_URL}/api/v1/employee/queue`, { headers: getHeaders() });
-  if (!res.ok) throw new Error('Fetch queue failed');
+  await ensureOk(res, 'Fetch queue failed');
   return res.json();
 }
 
@@ -83,7 +111,7 @@ export async function getEmployeeHierarchy() {
   const res = await fetch(`${API_URL}/api/v1/employee/hierarchy/topics`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error('Failed to fetch employee hierarchy');
+  await ensureOk(res, 'Failed to fetch employee hierarchy');
   return res.json();
 }
 
@@ -94,7 +122,7 @@ export async function getTTSAudioBlob(text: string) {
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ text })
   });
-  if (!res.ok) throw new Error('TTS failed');
+  await ensureOk(res, 'TTS failed');
   return res.blob();
 }
 
@@ -108,7 +136,7 @@ export async function submitEvaluation(flashcardId: string, messages: any[]) {
     },
     body: JSON.stringify({ flashcard_id: flashcardId, messages })
   });
-  if (!res.ok) throw new Error('Evaluation failed');
+  await ensureOk(res, 'Evaluation failed');
   return res.json();
 }
 
@@ -117,7 +145,7 @@ export async function getTopicCards(topicId: string) {
   const res = await fetch(`${API_URL}/api/v1/employee/topic/${topicId}/cards`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error('Failed to fetch topic cards');
+  await ensureOk(res, 'Failed to fetch topic cards');
   return res.json();
 }
 
@@ -127,7 +155,7 @@ export async function markCardWrong(flashcardId: string) {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error('Failed to mark wrong');
+  await ensureOk(res, 'Failed to mark wrong');
   return res.json();
 }
 
@@ -141,7 +169,7 @@ export async function createEmployee(name: string) {
     },
     body: JSON.stringify({ name })
   });
-  if (!res.ok) throw new Error('Failed to create new user');
+  await ensureOk(res, 'Failed to create new user');
   return res.json();
 }
 
@@ -157,7 +185,7 @@ export async function importOmiText(
     headers: getHeaders(),
     body: JSON.stringify({ title, text, topic_path: topicPath })
   });
-  if (!res.ok) throw new Error('Omi text import failed');
+  await ensureOk(res, 'Omi text import failed');
   return res.json();
 }
 
@@ -169,7 +197,7 @@ export async function finalizeOmiImport(
     headers: getHeaders(),
     body: JSON.stringify(params)
   });
-  if (!res.ok) throw new Error('Omi finalize failed');
+  await ensureOk(res, 'Omi finalize failed');
   return res.json();
 }
 
@@ -177,6 +205,6 @@ export async function getOmiCaptures(): Promise<any[]> {
   const res = await fetch(`${API_URL}/api/v1/integrations/omi/captures`, {
     headers: getHeaders()
   });
-  if (!res.ok) throw new Error('Failed to load Omi captures');
+  await ensureOk(res, 'Failed to load Omi captures');
   return res.json();
 }

@@ -64,8 +64,7 @@ async def upload_document(
         db.flush() # get db_chunk.id
         
         # Auto-gen via atomic pipeline
-        prompt = f"Based on this exact text, generate ONE highly specific flashcard question where the correct answer is literally the exact definition or core sentence from the text. Make it unambiguous. Output ONLY the question text:\n\n{chunk_text}"
-        question = services.generate_summary(prompt)
+        question = services.generate_flashcard_question(chunk_text)
         
         fc = models.Flashcard(chunk_id=db_chunk.id, generated_question=question.strip())
         db.add(fc)

@@ -36,6 +36,8 @@ systemctl start docker
 
 echo "[3/7] Resolving instance public IP..."
 VM_IP="$(curl -fsS -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip")"
+WEB_DOMAIN="web.$${VM_IP}.nip.io"
+API_DOMAIN="api.$${VM_IP}.nip.io"
 
 echo "[4/7] Writing runtime environment..."
 cat > /opt/shizen/.env <<ENV
@@ -49,7 +51,7 @@ DATABASE_URL=postgresql://${db_user}:${db_password}@${db_host}:${db_port}/${db_n
 PERPLEXITY_API_KEY=${perplexity_api_key}
 ELEVENLABS_API_KEY=${elevenlabs_api_key}
 APP_PORT=${app_port}
-VITE_API_URL=http://$${VM_IP}:8000
+VITE_API_URL=https://$${API_DOMAIN}
 ENV
 chmod 600 /opt/shizen/.env
 
@@ -64,14 +66,43 @@ else
 fi
 cp /opt/shizen/.env "$APP_DIR/.env"
 
-# Ensure frontend uses the VM public IP for backend calls.
-sed -i "s|VITE_API_URL=http://localhost:8000|VITE_API_URL=http://$${VM_IP}:8000|g" "$APP_DIR/docker-compose.yml" || true
+# Ensure frontend uses the HTTPS API endpoint.
+sed -i "s|VITE_API_URL=http://localhost:8000|VITE_API_URL=https://$${API_DOMAIN}|g" "$APP_DIR/docker-compose.yml" || true
+sed -i "s|VITE_API_URL=http://$${VM_IP}:8000|VITE_API_URL=https://$${API_DOMAIN}|g" "$APP_DIR/docker-compose.yml" || true
 echo "[6/7] Ensuring external Docker volumes..."
 docker volume create shizen_pg_data >/dev/null 2>&1 || true
 
 echo "[7/7] Starting Docker services..."
 cd "$APP_DIR"
 docker compose up -d --build --remove-orphans
+
+echo "Configuring HTTPS reverse proxy (Caddy)..."
+mkdir -p /opt/shizen/caddy
+cat > /opt/shizen/caddy/Caddyfile <<EOF
+{
+  email subject51024@gmail.com
+}
+web.$${VM_IP}.nip.io {
+  reverse_proxy 127.0.0.1:5173 {
+    header_up Host 127.0.0.1:5173
+  }
+}
+api.$${VM_IP}.nip.io {
+  reverse_proxy 127.0.0.1:8000
+}
+EOF
+
+docker volume create caddy_data >/dev/null 2>&1 || true
+docker volume create caddy_config >/dev/null 2>&1 || true
+docker rm -f shizen-caddy >/dev/null 2>&1 || true
+docker run -d \
+  --name shizen-caddy \
+  --restart unless-stopped \
+  --network host \
+  -v /opt/shizen/caddy/Caddyfile:/etc/caddy/Caddyfile \
+  -v caddy_data:/data \
+  -v caddy_config:/config \
+  caddy:2 >/dev/null
 
 echo "Waiting for containers to become healthy..."
 for i in $(seq 1 30); do
