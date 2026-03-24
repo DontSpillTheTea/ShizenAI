@@ -1,14 +1,28 @@
 # ShizenAI
 
-ShizenAI is a role-based training and competency verification platform. It ingests knowledge sources, generates flashcards, evaluates employee answers, and schedules review intervals using an SRS loop.
+ShizenAI is a local-first semantic context manager and adaptive LLM routing layer.
 
-The current stack is **Perplexity-first** (no Ollama runtime dependency) and runs as:
-- React/Vite frontend
-- FastAPI backend
-- PostgreSQL + pgvector
-- Terraform-managed GCP deployment
+The platform ingests and organizes knowledge, retrieves relevant context, and routes requests to the cheapest/fastest/most useful available path.
 
-## Tech Stack
+## Product Identity
+
+ShizenAI is structured as two layers:
+
+- Core platform: ingestion, normalization, chunking, embeddings, retrieval, routing, context packaging, observability.
+- Application modules: training/tutor, study workflows, transcript memory, and operational knowledge tools.
+
+This keeps the core durable while allowing product modules to evolve independently.
+
+## What the Platform Does
+
+- Ingests source material from documents and text-like inputs.
+- Builds semantic chunks with metadata and vector embeddings.
+- Stores semantic memory in PostgreSQL + `pgvector`.
+- Retrieves top-k relevant context by similarity.
+- Routes requests based on confidence, complexity, and runtime constraints.
+- Prepares reusable context bundles for downstream AI calls and integrations.
+
+## Tech Stack (Current)
 
 - **Frontend:** React, TypeScript, Vite
 - **Backend:** FastAPI, SQLAlchemy, Pydantic
@@ -54,11 +68,13 @@ flowchart LR
 ## Local Development
 
 ### Prerequisites
+
 - Docker Engine / Docker Desktop
 - Git
 - Perplexity API key
 
 ### Environment
+
 Create `.env` at repo root:
 
 ```bash
@@ -77,12 +93,14 @@ docker compose up --build -d
 ```
 
 ### Local URLs
+
 - Frontend: `http://localhost:5173`
 - API docs: `http://localhost:8000/docs`
 
 ## GCP Deployment (Terraform)
 
 Infra provisions:
+
 - Custom VPC + subnet
 - Private services access for Cloud SQL private IP
 - Cloud SQL PostgreSQL 15
@@ -102,6 +120,7 @@ terraform apply -auto-approve \
 ```
 
 Use Terraform outputs for:
+
 - `app_public_ip`
 - `db_private_ip`
 - `db_connection_name`
@@ -109,12 +128,12 @@ Use Terraform outputs for:
 ## Backend Notes
 
 - `PERPLEXITY_API_KEY` is used for summary/judging/topic extraction.
-- Embeddings are generated via a deterministic 768-d hashing fallback to keep pgvector schema stable and avoid heavyweight model downloads.
+- Embeddings are generated via a deterministic 768-d fallback to keep pgvector schema stable.
 - Startup seeds default users:
   - `admin` / `admin`
   - `employee` / `employee`
 
-## Data Model (Core)
+## Data Model (Current Core)
 
 - `users`
 - `topics`
@@ -126,8 +145,37 @@ Use Terraform outputs for:
 - `omi_captures`
 - `knowledge_sources`
 
-## Current Exposed Ports
+## Roadmap and Reframing Documents
 
-- `5173` frontend
-- `8000` backend/API docs
-- `5432` postgres (mapped in compose for local/dev)
+- Root execution checklist: `SHIZENAI_ROADMAP.md`
+- Foundation cleanup and architecture audit: `docs/platform_reframing_audit.md`
+- Historical phase docs and execution logs remain as implementation history.
+
+## Operational Commands
+
+Pause stack while preserving state:
+
+```bash
+docker compose stop
+```
+
+Shut down containers/network while retaining external data volumes:
+
+```bash
+docker compose down
+```
+
+Hard reset (includes volume deletion):
+
+```bash
+docker compose down -v
+docker volume rm shizen_pg_data shizen_ollama_models
+```
+
+## Near-Term Priorities
+
+1. Finalize platform-vs-application boundaries in code and API modules.
+2. Harden knowledge source/chunk/embedding schema and provenance metadata.
+3. Build a first-class routing engine module with explicit decision logging.
+4. Standardize context bundle output format for downstream model calls.
+5. Preserve training flows as a modular consumer rather than core identity.
