@@ -1,93 +1,107 @@
 # ShizenAI
 
-ShizenAI is a Local-First, semantic text-ingestion and RAG (Retrieval-Augmented Generation) MVP application. It allows users to ingest raw text, automatically summarize it using a Local LLM via Ollama, generate vector embeddings, and store/search the data semantically using PostgreSQL (`pgvector`).
+ShizenAI is a local-first semantic context manager and adaptive LLM routing layer.
 
-## Prerequisites
-- **Docker Engine / Docker Desktop:** Ensure you have virtualization enabled and Docker installed.
-- **System Resources:** Since we run LLMs locally via Ollama, we heavily recommend allocating at least 8GB of RAM/VRAM to the Docker engine.
-- **Git:** For version control.
+The platform ingests and organizes knowledge, retrieves relevant context, and decides the most practical response path across local models, internal compute, or external providers.
 
-## Setup & Spin up (From Scratch)
+## Product Identity
 
-To spin up the entire application stack from scratch locally:
+ShizenAI is now framed as a platform with two layers:
 
-### 1. Clone the repository
+- Core platform: ingestion, normalization, chunking, embeddings, retrieval, routing, context packaging, observability.
+- Application modules: training/tutor, study workflows, transcript memory, operational knowledge tools.
+
+This keeps the core durable while allowing product modules to evolve independently.
+
+## What the Platform Does
+
+- Ingests source material from documents and text-like inputs.
+- Builds semantic chunks with metadata and vector embeddings.
+- Stores semantic memory in PostgreSQL + `pgvector`.
+- Retrieves top-k relevant context by similarity.
+- Routes requests based on confidence, complexity, and runtime constraints.
+- Prepares reusable context bundles for downstream AI calls and future integrations.
+
+## Current Architecture
+
+The running stack remains containerized and local-first:
+
+1. Frontend (`shizenai-frontend`)
+   - React + Vite interface for ingestion, retrieval, and app workflows.
+2. Backend (`shizenai-backend`)
+   - FastAPI service with ingestion, retrieval, auth, and app modules.
+3. Database (`shizenai-postgres`)
+   - PostgreSQL + `pgvector` for relational and vector storage.
+4. Model runtime (`shizenai-ollama`)
+   - Local inference endpoint for summarization and embeddings.
+
+## Setup
+
+### Prerequisites
+
+- Docker Engine / Docker Desktop.
+- Git.
+- Enough local resources for model inference (8GB+ RAM/VRAM recommended).
+
+### Start the stack
+
 ```bash
 git clone https://github.com/DontSpillTheTea/ShizenAI.git
 cd ShizenAI
-```
-
-### 2. Start the Docker Stack
-This will pull the required images, build the custom backend/frontend containers, and start the system in detached mode.
-```bash
 docker compose up --build -d
 ```
 
-### 3. Initialize Local LLMs (First Run Only)
-Ollama does not bundle the language models by default. You must pull the models into the running container before the API can function:
-**Windows (PowerShell):**
+### Initialize local models (first run)
+
+Windows (PowerShell):
+
 ```powershell
 ./init_ollama.ps1
 ```
-**Mac/Linux:**
+
+Mac/Linux:
+
 ```bash
 docker compose exec ollama ollama pull qwen2.5:1.5b-instruct
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
-### 4. Access the Application
-- **Frontend (UI):** [http://localhost:5173](http://localhost:5173)
-- **Backend (API Docs):** [http://localhost:8000/docs](http://localhost:8000/docs)
+### Access points
 
----
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-## Developer Workflow & Spin Down
+## Operational Commands
 
-To stop the application without destroying your database state or downloaded LLMs:
+Pause stack while preserving state:
 
 ```bash
 docker compose stop
 ```
-*Use this when taking a break. You can safely run `docker compose start` to resume your working/live mode.*
 
-To completely destroy the containers and networks, but **retain** persistent database volumes and Ollama models:
+Shut down containers/network while retaining external data volumes:
+
 ```bash
 docker compose down
 ```
 
-To **hard reset** everything (WARNING: DELETES BUILT IMAGES. External volumes must be deleted manually):
+Hard reset (includes volume deletion):
+
 ```bash
 docker compose down -v
 docker volume rm shizen_pg_data shizen_ollama_models
 ```
 
-*(Note: Because `shizen_pg_data` and `shizen_ollama_models` are mapped as purely external volumes in Compose, `docker compose down -v` protects them from accidental deletion and only targets nameless, non-external bridged volumes.)*
+## Roadmap and Reframing Documents
 
----
+- Root execution checklist: `SHIZENAI_ROADMAP.md`
+- Foundation cleanup and architecture audit: `docs/platform_reframing_audit.md`
+- Historical phase docs and execution logs remain as implementation history.
 
-## Architectural Overview (Broad Terms)
+## Near-Term Priorities
 
-The architecture is containerized and currently split into four primary services:
-
-1. **Frontend (`shizenai-frontend`)**
-   - React 18, Vite, and Tailwind CSS.
-   - Provides views for Data Ingestion, an active Records Dashboard, and Semantic Search. Communicates strictly with the local backend over port 8000.
-2. **Backend (`shizenai-backend`)**
-   - Python FastAPI server handling the core business logic.
-   - Converts raw ingested text into concise summaries using the `qwen2.5:1.5b-instruct` model, then converts the summary into a 768-dimensional vector embedding via the `nomic-embed-text` model.
-   - Exposes RESTful wrappers to search and insert records.
-3. **Database (`shizenai-postgres`)**
-   - A PostgreSQL 15 database utilizing the `pgvector` extension.
-   - Relational data (timestamps, summaries, text) is stored alongside semantic vectors. Distance functions (`<=>` cosine similarity) are executed natively within SQL queries.
-4. **LLM Provider (`shizenai-ollama`)**
-   - The local Ollama server running heavily quantised inferencing models.
-
-*(Note: Detailed module intricacies will be fleshed out in subfolder-specific READMEs in the future).*
-
----
-
-## Known Edge Cases & Limitations
-
-- **State Persistence during Failure:** If the backend crashes while attempting to summarize or embed text, the SQLAlchemy transaction automatically rolls back. The text is not persisted to the relational database, nor is the vector inserted.
-- **Data Latency within Models:** Since the inference generation relies entirely on local unoptimized Docker resources, large ingestion blocks may cause noticeable latency before it hits the database.
-- **Embedding Portability Mismatch:** The current MVP strictly stores `768-dimensional` vectors specifically tailored to the `nomic-embed-text` output. Changing the underlying LLM provider in the future (e.g. to OpenAI `text-embedding-3-small`'s 1536 dims) will break the mathematical invariant of existing records without an explicit migration and re-embedding strategy.
+1. Finalize platform-vs-application boundaries in code and API modules.
+2. Harden knowledge source/chunk/embedding schema and provenance metadata.
+3. Build a first-class routing engine module with explicit decision logging.
+4. Standardize context bundle output format for downstream model calls.
+5. Preserve training flows as a modular consumer rather than core identity.
