@@ -28,7 +28,7 @@ This keeps the core durable while allowing product modules to evolve independent
 - **Backend:** FastAPI, SQLAlchemy, Pydantic
 - **Database:** PostgreSQL 15 + pgvector (`Vector(768)`)
 - **AI provider:** Perplexity API (`sonar` models)
-- **Infra:** Terraform on GCP (Compute Engine + Cloud SQL private IP + custom VPC)
+- **Infra (optional):** Terraform on GCP (Compute Engine + Cloud SQL private IP + custom VPC)
 - **Container runtime:** Docker Compose
 
 ## Architecture (Current)
@@ -97,7 +97,9 @@ docker compose up --build -d
 - Frontend: `http://localhost:5173`
 - API docs: `http://localhost:8000/docs`
 
-## GCP Deployment (Terraform)
+## Optional GCP Deployment (Terraform)
+
+Terraform is optional and only needed when you want to deploy outside local Docker.
 
 Infra provisions:
 
@@ -108,7 +110,7 @@ Infra provisions:
 - Firewall rules for 5173/8000 (and optional SSH)
 - Static external IP output
 
-### Deploy
+### Deploy (optional)
 
 ```bash
 cd terraform
